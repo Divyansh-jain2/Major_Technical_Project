@@ -1,0 +1,57 @@
+name: GSOD Himachal station check
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: "First year to check"
+        default: "2000"
+      end_year:
+        description: "Last year to check"
+        default: "2025"
+  push:
+    branches: [main]
+    paths:
+      - "himachal_gsod_check.py"
+      - ".github/workflows/gsod_check.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run station check
+        run: |
+          python himachal_gsod_check.py \
+            --start "${{ github.event.inputs.start_year || '2000' }}" \
+            --end "${{ github.event.inputs.end_year || '2025' }}" \
+            --save-daily --out data/gsod_himachal | tee data_run_log.txt
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsod_himachal_results
+          path: |
+            data/gsod_himachal
+            data_run_log.txt
+
+      - name: Commit results to the repo
+        run: |
+          mv data_run_log.txt data/gsod_himachal/run_log.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/gsod_himachal
+          git diff --cached --quiet || git commit -m "Update GSOD Himachal station results [skip ci]"
+          git push
