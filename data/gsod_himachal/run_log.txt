@@ -1,0 +1,88 @@
+Found 26 station entries in the Himachal box:
+
+        sid        STATION NAME    LAT    LON  ELEV(M)    BEGIN      END  in_hp_core
+42111099999            DEHRADUN 30.317 78.033    682.0 19440101 20250824       False
+42101099999             PATIALA 30.333 76.467    251.0 19730101 20250824       False
+42103099999              AMBALA 30.383 76.767    272.0 19440101 20250824        True
+42114099999               TEHRI 30.400 78.483    770.0 19981224 20250824        True
+42104099999               NAHAN 30.400 76.767    958.0 19881016 20250824        True
+42112099999           MUSSOORIE 30.450 78.083   2042.0 19540101 20201209        True
+42705299999          CHANDIGARH 30.673 76.789    308.5 20060812 20250716        True
+42108099999          UTTARKASHI 30.733 78.450   1200.0 19990420 20230805        True
+42105099999    CHANDIGARH(IAFB) 30.733 76.883    347.0 19740101 20250824        True
+42098099999             HALWARA 30.750 75.633    241.0 19440101 19481231        True
+42099099999            LUDHIANA 30.867 75.933    255.0 19730101 20250824        True
+42107099999            DHARMPUR 30.900 77.017   1986.0 19990701 20021214        True
+42083099999              SHIMLA 31.100 77.167   2202.0 19440101 20250824        True
+42080099999            BILASPUR 31.250 76.667    587.0 19590602 19971222        True
+42077099999                 UNA 31.467 76.267    369.0 20090205 20250824        True
+42075099999           JULLUNDUR 31.467 75.583   -999.9 20180918 20240213        True
+42079099999         SUNDERNAGAR 31.533 76.900    874.0 20130529 20250824        True
+42078099999               MANDI 31.717 76.967    761.0 19590602 20250824        True
+42081099999             BHUNTAR 31.833 77.167   1084.0 20020903 20250824        True
+42705199999        KULLU MANALI 31.877 77.154   1089.1 20040707 20250816        True
+42057099999 PATHANKOT (IN-AFB)& 32.233 75.633    312.0 19730102 19750831        True
+42062099999           DHARMSALA 32.267 76.383   1211.0 19730101 20250824        True
+42065099999              MANALI 32.267 77.167   2039.0 19990223 20250824        True
+42060099999              KATHUA 32.333 75.500    380.0 20011121 20180316       False
+42059099999           DALHOUSIE 32.533 75.967   1959.0 19440601 20060101        True
+42063099999             KYELONG 32.583 77.067   3348.0 20170926 20230807        True
+
+Checking DEHRADUN (42111099999) 2000-2025 ...
+Checking PATIALA (42101099999) 2000-2025 ...
+Checking AMBALA (42103099999) 2000-2025 ...
+Checking TEHRI (42114099999) 2000-2025 ...
+Checking NAHAN (42104099999) 2000-2025 ...
+Checking MUSSOORIE (42112099999) 2000-2020 ...
+Checking CHANDIGARH (42705299999) 2006-2025 ...
+Checking UTTARKASHI (42108099999) 2000-2023 ...
+Checking CHANDIGARH(IAFB) (42105099999) 2000-2025 ...
+Checking HALWARA (42098099999) 2000-1948 ...
+Checking LUDHIANA (42099099999) 2000-2025 ...
+Checking DHARMPUR (42107099999) 2000-2002 ...
+Checking SHIMLA (42083099999) 2000-2025 ...
+Checking BILASPUR (42080099999) 2000-1997 ...
+Checking UNA (42077099999) 2009-2025 ...
+Checking JULLUNDUR (42075099999) 2018-2024 ...
+Checking SUNDERNAGAR (42079099999) 2013-2025 ...
+Checking MANDI (42078099999) 2000-2025 ...
+Checking BHUNTAR (42081099999) 2002-2025 ...
+Checking KULLU MANALI (42705199999) 2004-2025 ...
+Checking PATHANKOT (IN-AFB)& (42057099999) 2000-1975 ...
+Checking DHARMSALA (42062099999) 2000-2025 ...
+Checking MANALI (42065099999) 2000-2025 ...
+Checking KATHUA (42060099999) 2001-2018 ...
+Checking DALHOUSIE (42059099999) 2000-2006 ...
+Checking KYELONG (42063099999) 2017-2023 ...
+
+=== Station summary (sorted by usable years) ===
+        sid                name    lat    lon  elev_m  in_hp_core  years_with_data  tmax_complete_pct  tmin_complete_pct  usable_years_80pct
+42111099999            DEHRADUN 30.317 78.033   682.0       False               26               97.7               97.7                  25
+42101099999             PATIALA 30.333 76.467   251.0       False               26               97.7               97.7                  25
+42105099999    CHANDIGARH(IAFB) 30.733 76.883   347.0        True               11               37.0               37.0                   9
+42103099999              AMBALA 30.383 76.767   272.0        True               11               36.9               36.9                   9
+42081099999             BHUNTAR 31.833 77.167  1084.0        True               11               34.9               34.9                   9
+42083099999              SHIMLA 31.100 77.167  2202.0        True               11               33.0               33.0                   9
+42079099999         SUNDERNAGAR 31.533 76.900   874.0        True               11               71.9               71.9                   8
+42099099999            LUDHIANA 30.867 75.933   255.0        True                9               23.8               23.8                   5
+42114099999               TEHRI 30.400 78.483   770.0        True               10               23.1               23.1                   5
+42705199999        KULLU MANALI 31.877 77.154  1089.1        True               13               26.4               26.4                   3
+42705299999          CHANDIGARH 30.673 76.789   308.5        True               10               15.2               15.2                   0
+42104099999               NAHAN 30.400 76.767   958.0        True                0                0.0                0.0                   0
+42112099999           MUSSOORIE 30.450 78.083  2042.0        True                0                0.0                0.0                   0
+42108099999          UTTARKASHI 30.733 78.450  1200.0        True                0                0.0                0.0                   0
+42098099999             HALWARA 30.750 75.633   241.0        True                0                0.0                0.0                   0
+42107099999            DHARMPUR 30.900 77.017  1986.0        True                0                0.0                0.0                   0
+42080099999            BILASPUR 31.250 76.667   587.0        True                0                0.0                0.0                   0
+42077099999                 UNA 31.467 76.267   369.0        True                0                0.0                0.0                   0
+42075099999           JULLUNDUR 31.467 75.583  -999.9        True                0                0.0                0.0                   0
+42078099999               MANDI 31.717 76.967   761.0        True                0                0.0                0.0                   0
+42057099999 PATHANKOT (IN-AFB)& 32.233 75.633   312.0        True                0                0.0                0.0                   0
+42062099999           DHARMSALA 32.267 76.383  1211.0        True                0                0.0                0.0                   0
+42065099999              MANALI 32.267 77.167  2039.0        True                0                0.0                0.0                   0
+42060099999              KATHUA 32.333 75.500   380.0       False                0                0.0                0.0                   0
+42059099999           DALHOUSIE 32.533 75.967  1959.0        True                0                0.0                0.0                   0
+42063099999             KYELONG 32.583 77.067  3348.0        True                0                0.0                0.0                   0
+
+'usable_years_80pct' = years with >=80% of days having both Tmax and Tmin.
+Files written to ./data/gsod_himachal/
