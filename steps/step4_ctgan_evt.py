@@ -3,6 +3,8 @@
 # Paste into ONE Colab cell and run.
 # BEFORE RUNNING: Runtime > Change runtime type > T4 GPU (free). Works on CPU too,
 #   just slower (fewer GAN epochs are used automatically).
+# The data is first copied from Drive to Colab's local disk (a few minutes), and Drive
+#   is re-mounted automatically if its connection drops.
 # Time: ~30-45 min on a T4 runtime. Every finished part is saved to Drive, so if
 #   Colab disconnects, run the cell again: finished parts are skipped.
 #
@@ -41,11 +43,47 @@ from ctgan import CTGAN
 from google.colab import drive
 
 warnings.filterwarnings("ignore")
+import shutil
 drive.mount("/content/drive")
 BASE = "/content/drive/MyDrive/himachal_project"
-DATA = f"{BASE}/data/model_ready"
+DRIVE_DATA = f"{BASE}/data/model_ready"
+DATA = "/content/local_data"          # local copy: faster, and immune to Drive dropping out
 S3B = f"{BASE}/results/step3b"
 OUT = f"{BASE}/results/step4"
+
+
+def drive_ok():
+    """Re-mount Google Drive if the connection dropped ('Transport endpoint is not connected')."""
+    for attempt in range(3):
+        try:
+            os.listdir(BASE)
+            return
+        except OSError:
+            print("   Drive connection lost, re-mounting ...", flush=True)
+            time.sleep(5)
+            drive.mount("/content/drive", force_remount=True)
+    os.listdir(BASE)
+
+
+def copy_local(name):
+    src, dst = f"{DRIVE_DATA}/{name}", f"{DATA}/{name}"
+    for attempt in range(4):
+        try:
+            drive_ok()
+            if not (os.path.exists(dst) and os.path.getsize(dst) == os.path.getsize(src)):
+                shutil.copy(src, dst + ".part")
+                os.replace(dst + ".part", dst)
+            return
+        except OSError as e:
+            print(f"   copy of {name} failed ({e}); retrying", flush=True)
+            time.sleep(10)
+    raise RuntimeError(f"could not copy {name} from Drive; re-run the cell")
+
+
+os.makedirs(DATA, exist_ok=True)
+for f in ("train.parquet", "val.parquet", "test.parquet"):
+    copy_local(f)
+    print(f"   local copy ready: {f}", flush=True)
 
 # ---------------------------------------------------------------- settings
 TARGET = "y_heat_season"
@@ -61,6 +99,7 @@ LGB_PARAMS = dict(objective="binary", learning_rate=0.05, num_leaves=31, min_chi
                   n_estimators=1000, random_state=SEED, n_jobs=-1, verbose=-1)
 # ----------------------------------------------------------------
 
+drive_ok()
 os.makedirs(OUT, exist_ok=True)
 LINES, T0 = [], time.time()
 pd.set_option("display.width", 250)
@@ -80,6 +119,7 @@ def progress(msg):
 
 
 def save_summary():
+    drive_ok()
     txt = "\n".join(LINES) + "\n"
     for p in (f"{OUT}/step4_summary.txt", f"{BASE}/step4_summary.txt"):
         with open(p, "w") as fh:
@@ -99,6 +139,7 @@ section("1. DATA (same features as Step 3b, calendar features removed)")
 kind = "heat" if "heat" in TARGET else "cold"
 lab = TARGET.split("_", 2)[2]
 thr_col, exc_col = f"thr_{kind}_{lab}_next", f"excess_{kind}_{lab}_next"
+drive_ok()
 scales = pd.read_csv(f"{S3B}/cell_scales.csv")[["cell", "season_next", f"{kind}_scale"]]
 cols0 = pd.read_parquet(f"{DATA}/val.parquet").columns
 BASE_FEATS = [c for c in cols0 if c not in ("date", "cell", "season_next", "doy_sin", "doy_cos")
@@ -174,6 +215,7 @@ if gan is None:
     progress(f"training CTGAN on {len(real_pos):,} extreme days x {len(GEN_COLS)} columns")
     gan = CTGAN(epochs=GAN_EPOCHS, batch_size=500, cuda=GPU, verbose=False)
     gan.fit(real_pos, discrete_columns=["season_next"])
+    drive_ok()
     gan.save(gan_path)
     progress("CTGAN trained and saved")
 
@@ -236,6 +278,7 @@ for name in ("ctgan_vanilla", "ctgan_physical", "ctgan_evt"):
         pool = pool[physical_ok(pool)]
         s_ = evt_resample(pool, N_SYN)
         out(f"EVT: {len(pool):,} physically valid in the pool -> {len(s_):,} tail-consistent samples")
+    drive_ok()
     s_.to_parquet(path, index=False)
     syn[name] = s_
     progress(f"{name} ready")
@@ -318,6 +361,7 @@ def evaluate(name, p_va, p_te, note):
 
 def save_result(r, p_te):
     global done, preds
+    drive_ok()
     done = pd.concat([done[done.model != r["model"]] if len(done) else done, pd.DataFrame([r])], ignore_index=True)
     done.to_csv(res_path, index=False)
     preds[r["model"]] = p_te.astype("float32")
