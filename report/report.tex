@@ -1,0 +1,411 @@
+% =============================================================================
+% Major Technical Project report
+% Extreme Value-Guided Deep Generative Models for Imbalanced Classification
+% Case study: next-day temperature extremes in Himachal Pradesh
+%
+% Compile: pdflatex report.tex (twice). Figures are optional: put the PNGs from
+% Drive (results/step3b/evt_qq_std.png, results/step4/tail_survival.png,
+% results/step4/pr_curves.png) in a folder "figures/" next to this file.
+% Values marked \pending{} are filled in after the Step 4 run.
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{siunitx}
+\sisetup{detect-all}
+\setlist{nosep,leftmargin=1.4em}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black}
+\newcommand{\pending}{\textcolor{red!70!black}{\textit{pending}}}
+\newcommand{\optfig}[2]{%
+  \IfFileExists{#1}{\includegraphics[width=#2]{#1}}%
+  {\fbox{\parbox{0.8\linewidth}{\centering\small Figure file \texttt{\detokenize{#1}} not found.\\
+   Copy it from Google Drive into \texttt{figures/}.}}}}
+
+\title{\textbf{Extreme Value-Guided Deep Generative Models\\for Imbalanced Classification}\\[4pt]
+\large Case study: next-day temperature extremes in Himachal Pradesh, 1981--2025}
+\author{Divyansh Jain\\Major Technical Project}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Minority classes in imbalanced classification are often the most extreme cases in the data, yet the
+standard remedies (class weighting, SMOTE) and modern deep generative models do not model tail
+behaviour explicitly. We treat the minority class as a tail phenomenon: a Generalized Pareto
+Distribution (GPD) fitted by peaks-over-threshold describes how severe minority examples are, and this
+description constrains the synthetic examples produced by a conditional tabular GAN (CTGAN). We study
+next-day extreme temperature days on a \ang{0.1} ERA5-Land grid over Himachal Pradesh (529 cells,
+1981--2025, about 1\% positives). We build season-wise, whole-year and day-of-year extreme labels from
+1981--2010 thresholds, show that standardising excesses by each cell's own variability turns
+spuriously heavy pooled tails into bounded ones ($\xi\approx-0.15$ for whole-year heat), and establish
+baselines on the unseen decade 2016--2025: adding threshold-distance features raises LightGBM's PR-AUC
+from 0.43--0.45 to 0.53--0.56, with SMOTE best (0.562) but a persistence rule still ahead overall
+(0.586). The data also show a doubling of heat extremes in the test decade and more intense winter
+warm extremes. The comparison of vanilla and EVT-guided CTGAN is \pending.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+% -----------------------------------------------------------------------------
+\section{Introduction}
+In imbalanced classification the class of interest is rare and is therefore learned poorly. Common
+remedies re-weight the loss or create synthetic minority samples by interpolation
+(SMOTE~\cite{chawla2002smote}). These have no guarantee of producing realistic samples and are weakest
+in the extreme regions of the feature space. Deep generative models such as GANs~\cite{goodfellow2014gan}
+and their tabular variants~\cite{xu2019ctgan} can produce richer synthetic data, but are trained to match
+the bulk of the distribution and tend to under-represent its tails.
+
+Extreme value theory (EVT)~\cite{coles2001} gives an asymptotically justified model for the tail of a
+distribution. The objective of this project is a general framework that integrates EVT with deep
+generative models so that synthetic minority data are statistically consistent with real extremes. The
+core ideas are:
+\begin{enumerate}
+  \item treat the minority class as a tail phenomenon;
+  \item use EVT to characterise and constrain that tail;
+  \item use generative models to augment and rebalance the training data;
+  \item verify that synthetic data reproduce the extreme behaviour.
+\end{enumerate}
+This report covers the first, basic version of the framework and its application to next-day
+temperature extremes in Himachal Pradesh, India.
+
+% -----------------------------------------------------------------------------
+\section{Data}
+\subsection{Sources}
+Table~\ref{tab:sources} lists the data used. Raw files are never modified; every processing step
+reads earlier outputs and writes to its own folder.
+
+\begin{table}[h]
+\centering\small
+\caption{Data sources.}\label{tab:sources}
+\begin{tabular}{@{}l p{5.2cm} l l@{}}
+\toprule
+Source & Content & Period, grid & Role \\
+\midrule
+ERA5-Land~\cite{munoz2021era5land} & Tmax, Tmin, Tmean, dewpoint, pressure, wind, soil moisture, snow,
+  rain, solar radiation & 1981--2025, \ang{0.1} & labels, features \\
+SRTM & elevation & \SI{30}{m} & terrain features \\
+GADM boundary & state outline & -- & mask (529 cells) \\
+IMD gridded temperature & Tmax, Tmin from stations & 1981--2025, \ang{1} & regional check only \\
+GSOD stations & Shimla, Sundernagar, Bhuntar & 2016--2025 & planned point check \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+ERA5-Land is the only source that is complete for 45 years at a resolution fine enough for
+mountainous terrain. It has absolute biases on steep slopes, but our labels compare each grid cell with
+its own history, so a constant bias shifts the threshold and not the set of extreme days.
+
+\subsection{Pre-processing and verification}
+An earlier pipeline placed all inputs on ERA5-Land's \ang{0.1} grid over
+\ang{30.3}--\ang{33.3}N, \ang{75.5}--\ang{79.1}E ($31\times37$ cells), shifted the accumulated
+variables (rain, radiation) back by the one day by which ERA5-Land stamps them late, averaged SRTM into
+cell elevation and slope, derived relative humidity, wind speed and diurnal range, and masked cells
+outside the state, leaving 529 cells and 16{,}436 days.
+
+We verified this file against the raw ERA5-Land files for five cells (522--\SI{5279}{m}) and six
+years: temperatures, dewpoint, soil moisture, snow and rain match exactly after unit conversion, with no
+day where $T_{\min}>T_{\max}$. Mean temperature and humidity were missing for 1981--1985 and were
+refilled from the raw files (humidity recomputed with the Magnus formula, agreeing with stored values
+within 0.03\,\%RH). A bias correction against MODIS produced by the earlier pipeline was not used: its
+validation against IMD showed a $-15$\,\textdegree C bias that is most plausibly the IMD missing-value
+code (99.9) being treated as data.
+
+% -----------------------------------------------------------------------------
+\section{Problem formulation}
+\subsection{Extreme labels}
+For cell $c$ and day $t$ let $T^{\max}_{c,t}$ be the daily maximum temperature. A threshold
+$u_{c,g}$ is the 99th percentile of $T^{\max}$ over the days of group $g$ in the base period 1981--2010.
+Day $t$ is a heat extreme if $T^{\max}_{c,t}>u_{c,g(t)}$; cold extremes use the 1st percentile of
+$T^{\min}$. Three groupings are used:
+\begin{itemize}
+  \item \textbf{season} (main): IMD seasons, winter (Dec--Feb), pre-monsoon (Mar--May),
+        monsoon (Jun--Sep), post-monsoon (Oct--Nov); each season is compared only with the same season;
+  \item \textbf{whole year}: all days;
+  \item \textbf{day of year}: the same calendar day $\pm 7$ days.
+\end{itemize}
+Using only 1981--2010 for thresholds keeps the validation and test years unseen.
+Table~\ref{tab:thr} shows that thresholds fall by about 6--7\,\textdegree C per km of altitude,
+consistent with the atmospheric lapse rate.
+
+\begin{table}[h]
+\centering\small
+\caption{Mean heat threshold (99th percentile of Tmax, \textdegree C) by elevation band.}\label{tab:thr}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Elevation & Winter & Pre-monsoon & Monsoon & Post-monsoon & Whole year & Cells\\
+\midrule
+$<$1 km & 24.5 & 39.4 & 39.3 & 30.3 & 38.8 & 95\\
+1--2 km & 20.0 & 32.0 & 31.9 & 24.4 & 31.3 & 91\\
+2--3 km & 13.8 & 23.7 & 24.2 & 18.9 & 23.5 & 77\\
+3--4 km & 4.4 & 13.2 & 17.5 & 12.3 & 16.7 & 65\\
+4--5 km & $-3.4$ & 5.3 & 13.6 & 6.8 & 12.7 & 134\\
+$>$5 km & $-8.1$ & 1.0 & 11.4 & 2.9 & 10.3 & 67\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Prediction task and features}
+Each sample is one cell on day $t$; the target is whether day $t+1$ is a seasonal heat extreme
+(\texttt{y\_heat\_season}). Features are the weather on days $t$, $t-1$, $t-2$ (Tmax, Tmin, Tmean,
+dewpoint, humidity, pressure, solar radiation, soil moisture, rain), temperature anomalies, terrain
+(latitude, longitude, elevation, slope) and, from Step 3b on, distances to tomorrow's threshold
+(Section~\ref{sec:features}). The data are split by year, because neighbouring days and cells are
+strongly correlated (one heatwave makes hundreds of cells extreme at once):
+
+\begin{table}[h]
+\centering\small
+\caption{Splits and share of extreme days.}\label{tab:splits}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Split & Label years & Rows & Heat (season) & Heat (whole year) & Cold (season)\\
+\midrule
+Train & 1981--2010 & 5{,}794{,}666 & 1.02\% & 1.00\% & 1.02\%\\
+Validation & 2011--2015 & 965{,}954 & 1.00\% & 0.77\% & 0.88\%\\
+Test & 2016--2025 & 1{,}932{,}437 & 1.94\% & 1.34\% & 0.58\%\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{What the labels show}
+\begin{itemize}
+  \item \textbf{Warming.} Heat extremes nearly double in the test decade while cold extremes fall.
+        2024 has the most widespread heat (4.4\% of cell-days, whole-year label).
+  \item \textbf{Strongest signal in October--November.} Post-monsoon heat extremes reach 11.0\% of
+        days in 2020 and 6--7\% in 2017, 2021 and 2024, against a 1\% baseline.
+  \item \textbf{Clustering.} On 6 October 1983, 522 of 529 cells were extreme together; the
+        59{,}000 training positives come from a few hundred events.
+  \item \textbf{Season-edge effect.} Seasonal extremes gather at the warm or cold edge of a season
+        (pre-monsoon heat in May, post-monsoon heat in early October, monsoon cold in late
+        September); the day-of-year label serves as a comparison free of this effect.
+\end{itemize}
+
+% -----------------------------------------------------------------------------
+\section{Extreme value model of the minority class}
+\subsection{Peaks over threshold}
+By the Pickands--Balkema--de Haan theorem~\cite{pickands1975,balkema1974}, for a high threshold $u$
+the excess $Y=X-u$ given $X>u$ is approximately Generalized Pareto distributed:
+\begin{equation}
+  F_{\xi,\sigma}(y)=1-\left(1+\frac{\xi y}{\sigma}\right)^{-1/\xi},\qquad y>0,\; 1+\xi y/\sigma>0 .
+\end{equation}
+The shape $\xi$ determines the tail: $\xi<0$ gives a bounded tail with upper end point $\sigma/|\xi|$
+(expected for temperature), $\xi=0$ an exponential tail and $\xi>0$ a heavy tail. Parameters are fitted
+by maximum likelihood on 1981--2010 exceedances. Confidence intervals come from a block bootstrap that
+resamples whole days (100 resamples), since exceedances are spatially clustered. Threshold stability is
+checked by refitting above the 25th and 50th percentile of the excesses. The $m$-year return level of
+the excess, for a group with $n_y$ days per year and exceedance rate $\zeta$, is
+\begin{equation}
+  y_m=\frac{\sigma}{\xi}\left[(m\,n_y\,\zeta)^{\xi}-1\right].
+\end{equation}
+
+\subsection{Standardised excesses}
+Pooling raw excesses from all 529 cells mixes low cells with small day-to-day variability and high
+cells with large variability; the mixture looks heavy-tailed even when each cell's tail is bounded. We
+therefore standardise each excess by the cell's own variability $s_{c,g}$ (the standard deviation of its
+daily temperature anomaly in that season, 1981--2010):
+\begin{equation}
+  z_{c,t}=\frac{T^{\max}_{c,t}-u_{c,g(t)}}{s_{c,g(t)}} .
+\end{equation}
+
+\begin{table}[h]
+\centering\small
+\caption{GPD shape $\xi$ fitted to raw and standardised excesses (1981--2010), with 95\% block-bootstrap
+interval, and the share of 2016--2025 extremes beyond the fitted 90th percentile (0.10 means an
+unchanged tail).}\label{tab:gpd}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Group & $\xi$ raw & $\xi$ standardised & 95\% interval & Recent beyond q90\\
+\midrule
+Heat, whole year & $-0.153$ & $-0.152$ & $[-0.196,-0.113]$ & 0.077\\
+Heat, monsoon & $-0.128$ & $-0.115$ & $[-0.185,-0.040]$ & 0.080\\
+Heat, pre-monsoon & $-0.165$ & $-0.141$ & $[-0.241,-0.072]$ & 0.103\\
+Heat, winter & $-0.074$ & $-0.096$ & $[-0.176,-0.032]$ & \textbf{0.209}\\
+Heat, post-monsoon & $0.262$ & $0.070$ & $[-0.177,0.231]$ & 0.063\\
+Heat, day of year & $0.056$ & $0.025$ & $[-0.040,0.092]$ & 0.176\\
+\midrule
+Cold, monsoon & $0.159$ & $-0.071$ & $[-0.142,0.023]$ & 0.005\\
+Cold, pre-monsoon & $-0.111$ & $-0.061$ & $[-0.095,-0.024]$ & 0.092\\
+Cold, post-monsoon & $0.085$ & $0.051$ & $[-0.021,0.112]$ & 0.149\\
+Cold, winter & $0.125$ & $0.190$ & $[0.108,0.265]$ & 0.091\\
+Cold, whole year & $0.010$ & $0.079$ & $[0.032,0.120]$ & 0.095\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+After standardisation every heat tail is bounded or close to it, in line with physical expectations
+(Table~\ref{tab:gpd}, Figure~\ref{fig:qq}); the spurious heavy tail of post-monsoon heat
+($\xi=0.26$) largely disappears. Cold tails are only partly fixed and appear to mix different
+regimes. Recent winter warm extremes exceed the old tail's 90th percentile twice as often as expected,
+indicating more intense, not only more frequent, winter warm spells.
+
+\begin{figure}[h]
+\centering
+\optfig{figures/evt_qq_std.png}{\linewidth}
+\caption{GPD Q-Q plots of raw (grey) and standardised (blue) excesses, 1981--2010.}\label{fig:qq}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\section{Baselines}\label{sec:features}
+All classifiers are trained on 1981--2010; the decision threshold is chosen on 2011--2015 to maximise
+F1 and applied to 2016--2025. PR-AUC is the main score (a random classifier scores the positive share,
+0.019); we also report precision, recall and the critical success index
+$\mathrm{CSI}=\mathrm{TP}/(\mathrm{TP}+\mathrm{FP}+\mathrm{FN})$ common in forecast verification.
+\begin{itemize}
+  \item \textbf{Persistence} (no model): score $=T^{\max}_{c,t}-u_{c,g(t+1)}$.
+  \item \textbf{LightGBM}~\cite{ke2017lightgbm} without rebalancing, with class weights, and with SMOTE
+        (minority grown to 10\% of the majority, $+514{,}294$ samples).
+\end{itemize}
+In a first version the model relied on calendar features (39\% of split gain), which do not transfer
+to a warmer test decade. Adding the distance of today, yesterday and the day before to tomorrow's
+threshold, in \textdegree C and in units of $s_{c,g}$, fixed this (the standardised distance now carries
+78\% of the gain).
+
+\begin{table}[h]
+\centering\small
+\caption{Test results (2016--2025) for next-day seasonal heat extremes.}\label{tab:base}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Model & PR-AUC (v1) & PR-AUC (v2) & Recall & Precision & CSI\\
+\midrule
+Persistence & 0.586 & 0.586 & 0.602 & 0.553 & 0.405\\
+LightGBM, plain & 0.434 & 0.531 & 0.411 & 0.592 & 0.320\\
+LightGBM, no calendar & -- & 0.549 & 0.468 & 0.582 & 0.350\\
+LightGBM, weighted & 0.446 & 0.525 & 0.491 & 0.601 & 0.370\\
+LightGBM, SMOTE & 0.449 & \textbf{0.562} & 0.515 & 0.574 & 0.373\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+SMOTE is the strongest classic rebalancing method and is the bar for the generative methods. Persistence
+remains slightly ahead overall because heat extremes persist from day to day and because the models,
+trained on 1981--2010, face a test decade with twice as many extremes. In the monsoon season SMOTE
+already beats persistence (PR-AUC 0.481 vs 0.442).
+
+% -----------------------------------------------------------------------------
+\section{EVT-guided CTGAN}
+\subsection{Generator}
+A CTGAN~\cite{xu2019ctgan}, a conditional GAN for mixed tabular data with mode-specific normalisation,
+is trained on the real extreme days of a random half of 1981--2010 (about 30{,}000 samples): the 41
+classifier features plus the season and the standardised severity $z$. The severity steers generation
+only and is never a classifier feature, as it encodes the next day's outcome.
+
+\subsection{Three synthetic sets from one generator}
+All three come from the same trained CTGAN, so differences are due to the EVT guidance, and each adds
+minority samples up to 10\% of the majority class, as for SMOTE.
+\begin{enumerate}
+  \item \textbf{Vanilla}: samples used as generated.
+  \item \textbf{Physical}: samples violating physical consistency are removed
+        ($T^{\min}\le T^{\text{mean}}\le T^{\max}$, $0\le\mathrm{RH}\le100$, non-negative rain and
+        radiation, dewpoint not above temperature, consistent signs of distance features, terrain within
+        the observed range).
+  \item \textbf{EVT-guided} (proposed): physical filter, then for each season $k$ the samples are
+        resampled so that $z$ follows the fitted $\mathrm{GPD}(\xi_k,\sigma_k)$. The support is split
+        into $B=20$ bins of equal GPD probability; a sample in bin $b$ receives weight
+        \begin{equation}
+          w_b=\frac{1/B}{\hat p_b},\qquad \hat p_b=\frac{\#\{\text{generated } z\in b\}}{n},
+        \end{equation}
+        and samples with $z\ge\sigma_k/|\xi_k|$ (beyond the bounded tail) are rejected.
+\end{enumerate}
+
+\subsection{Evaluation}
+The classifier is identical in every experiment (LightGBM, learning rate 0.05, up to 1{,}000 trees with
+early stopping, no calendar features, and a monotone constraint that a larger distance to the threshold
+can only increase the predicted risk). Besides the scores of Table~\ref{tab:base} we report
+\begin{itemize}
+  \item \textbf{onset} PR-AUC and recall on days that are not yet extreme, where persistence cannot help;
+  \item \textbf{top-10\% recall}: the share of the most severe test extremes that are detected;
+  \item \textbf{tail consistency} of each synthetic set: GPD refit on its $z$, upper quantiles and the
+        Kolmogorov--Smirnov distance to the fitted tail.
+\end{itemize}
+
+\begin{table}[h]
+\centering\small
+\caption{Test results (2016--2025), same classifier, different training data. \pending}\label{tab:gan}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Training data & PR-AUC & Recall & CSI & Onset PR-AUC & Top-10\% recall\\
+\midrule
+Persistence (no model) & \pending & \pending & \pending & \pending & \pending\\
+Plain & \pending & \pending & \pending & \pending & \pending\\
+Class weights & \pending & \pending & \pending & \pending & \pending\\
+SMOTE & \pending & \pending & \pending & \pending & \pending\\
+CTGAN, vanilla & \pending & \pending & \pending & \pending & \pending\\
+CTGAN, physical filter & \pending & \pending & \pending & \pending & \pending\\
+\textbf{CTGAN, EVT-guided} & \pending & \pending & \pending & \pending & \pending\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\optfig{figures/tail_survival.png}{\linewidth}
+\caption{Survival curves of the standardised severity $z$ per season: real extremes, vanilla CTGAN,
+EVT-guided CTGAN and the fitted GPD.}\label{fig:tail}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\optfig{figures/pr_curves.png}{0.6\linewidth}
+\caption{Precision--recall curves on the test decade 2016--2025.}\label{fig:pr}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\section{Discussion and limitations}
+\begin{itemize}
+  \item Labels come from a reanalysis; a check against station observations (GSOD: Shimla,
+        Sundernagar, Bhuntar) is planned.
+  \item The test decade has about twice the training rate of heat extremes. This non-stationarity
+        hurts any model trained on 1981--2010 and is itself a reason to model the tail explicitly.
+  \item Seasonal labels show a season-edge effect for post-monsoon heat and monsoon cold.
+  \item Cold tails are not yet captured by a single pooled GPD.
+  \item EVT currently guides the generator only at sampling time; it does not shape training.
+  \item All experiments run on free Colab resources.
+\end{itemize}
+
+\section{Next steps}
+\begin{enumerate}
+  \item Complete and analyse the Step 4 comparison (Table~\ref{tab:gan}).
+  \item Move EVT into training: a GPD-likelihood penalty on generated excesses in the generator loss.
+  \item Apply the same guidance to a tabular diffusion model (TabDDPM~\cite{kotelnikov2023tabddpm}).
+  \item Extend to cold extremes, add station checks, and test on public imbalanced benchmarks to
+        support the general-purpose claim.
+\end{enumerate}
+
+\section*{Reproducibility}
+All code is in the GitHub repository \texttt{Divyansh-jain2/Major\_Technical\_Project}
+(folder \texttt{steps/}). Each step runs as one Colab cell, reads only earlier outputs, writes only to
+its own folder and saves a text summary.
+
+% -----------------------------------------------------------------------------
+\begin{thebibliography}{99}
+\bibitem{coles2001} S.~Coles. \textit{An Introduction to Statistical Modeling of Extreme Values}.
+  Springer, 2001.
+\bibitem{pickands1975} J.~Pickands. Statistical inference using extreme order statistics.
+  \textit{Annals of Statistics}, 3(1):119--131, 1975.
+\bibitem{balkema1974} A.~A.~Balkema and L.~de~Haan. Residual life time at great age.
+  \textit{Annals of Probability}, 2(5):792--804, 1974.
+\bibitem{chawla2002smote} N.~V.~Chawla, K.~W.~Bowyer, L.~O.~Hall and W.~P.~Kegelmeyer. SMOTE: Synthetic
+  minority over-sampling technique. \textit{Journal of Artificial Intelligence Research}, 16:321--357, 2002.
+\bibitem{goodfellow2014gan} I.~Goodfellow et al. Generative adversarial nets. In \textit{Advances in
+  Neural Information Processing Systems}, 2014.
+\bibitem{xu2019ctgan} L.~Xu, M.~Skoularidou, A.~Cuesta-Infante and K.~Veeramachaneni. Modeling tabular
+  data using conditional GAN. In \textit{Advances in Neural Information Processing Systems}, 2019.
+\bibitem{kotelnikov2023tabddpm} A.~Kotelnikov, D.~Baranchuk, I.~Rubachev and A.~Babenko. TabDDPM:
+  Modelling tabular data with diffusion models. In \textit{International Conference on Machine
+  Learning}, 2023.
+\bibitem{ke2017lightgbm} G.~Ke et al. LightGBM: A highly efficient gradient boosting decision tree. In
+  \textit{Advances in Neural Information Processing Systems}, 2017.
+\bibitem{munoz2021era5land} J.~Mu\~noz-Sabater et al. ERA5-Land: a state-of-the-art global reanalysis
+  dataset for land applications. \textit{Earth System Science Data}, 13:4349--4383, 2021.
+\end{thebibliography}
+
+\end{document}
