@@ -141,7 +141,6 @@ del tr
 
 cells = pd.read_csv(f"{LOCAL}/cells.csv")
 thr_sea = xr.open_dataset(f"{LOCAL}/thresholds.nc")["thr_heat_season"].values
-scale_tab = pos.groupby(["cell", "season"])["scale"].first()
 sc_full = pd.read_csv(f"{BASE}/results/step3b/cell_scales.csv").pivot(
     index="cell", columns="season_next", values="heat_scale").reindex(cells.cell).values      # (cell, season)
 tree = cKDTree(np.c_[cells.lat.values, cells.lon.values])
@@ -204,6 +203,20 @@ class Denoiser(nn.Module):
 s_ = torch.linspace(0, 1, T_DIFF + 1)
 abar = torch.cos((s_ + 0.008) / 1.008 * math.pi / 2) ** 2
 abar = (abar / abar[0]).clamp(1e-5, 1)[1:].to(DEV)                 # alpha-bar for t = 1..T
+# ---- 2-minute self-check: tiny model, 30 steps, sample 300 rows, catches errors before the long run
+_pf = Denoiser(D_IN, len(SNAMES) + 2, h=64, nblocks=1).to(DEV)
+_opt = torch.optim.AdamW(_pf.parameters(), lr=1e-3)
+_X = torch.tensor(Xn[:2000], device=DEV)
+for _ in range(30):
+    _t = torch.randint(0, T_DIFF, (len(_X),), device=DEV)
+    _c = torch.tensor(cond_matrix(pos.season.values[:2000].astype(int), pos.z.values[:2000],
+                                  np.ones(len(_X), "float32")), device=DEV)
+    _e = torch.randn_like(_X)
+    _ab = abar[_t][:, None]
+    _l = ((_pf(_ab.sqrt() * _X + (1 - _ab).sqrt() * _e, _t, _c) - _e) ** 2).mean()
+    _opt.zero_grad(); _l.backward(); _opt.step()
+out(f"self-check: tiny diffusion trained (loss {_l.item():.3f})")
+del _pf, _opt, _X
 model_path = f"{OUT}/diffusion.pt"
 net = Denoiser(D_IN, len(SNAMES) + 2).to(DEV)
 ema = Denoiser(D_IN, len(SNAMES) + 2).to(DEV)
@@ -224,7 +237,7 @@ else:
         x0 = X_t[i]
         keep = (torch.rand(BATCH, device=DEV) > P_DROP).float()
         c = torch.zeros(BATCH, len(SNAMES) + 2, device=DEV)
-        c[torch.arange(BATCH), S_t[i]] = 1
+        c[torch.arange(BATCH, device=DEV), S_t[i]] = 1
         c[:, len(SNAMES)] = Z_t[i] / Z_SCALE
         c[:, len(SNAMES) + 1] = 1
         c = c * keep[:, None]
@@ -312,11 +325,15 @@ def construct(X, season, z):
     return df, rep
 
 
+Z_CAP = {k: 1.5 * float(pos.z[pos.season == k].max()) for k in range(len(SNAMES))}
+
+
 def gpd_draw(k, n, lower_u=0.0):
+    """Severities from the fitted GPD; capped at the tail's bound and at 1.5x the largest observed extreme."""
     xi, sig, ub = GPD[k]
     u = rng.uniform(lower_u, 1.0, n)
     z = stats.genpareto.ppf(np.minimum(u, 1 - 1e-9), xi, scale=sig)
-    return np.minimum(z, ub * 0.999) if np.isfinite(ub) else z
+    return np.minimum(z, min(ub * 0.999, Z_CAP[k]))
 
 
 def request(name):
@@ -339,6 +356,10 @@ def request(name):
 
 
 section("3. GENERATE SYNTHETIC EXTREMES")
+_s, _z = request("ddpm_evt")
+_d, _ = construct(sample(_s[:300], _z[:300]), _s[:300], _z[:300])
+assert len(_d) == 300 and set(FEATS) <= set(_d.columns) and np.isfinite(_d[FEATS].values).all(), "self-check failed"
+out("self-check: sampling + physics construction OK")
 syn, reps = {}, []
 for name in ("ddpm_emp", "ddpm_evt", "ddpm_evt_tail"):
     path = f"{OUT}/synthetic_{name}.parquet"

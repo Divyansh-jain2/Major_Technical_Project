@@ -282,6 +282,14 @@ def record(key, p_va, p_te, note):
 
 
 section("2. TRAIN AND SCORE")
+if "mlp" in CLASSIFIERS:                     # 1-minute self-check of the neural network path
+    _keep = MLP_SEEDS, MLP_EPOCHS
+    MLP_SEEDS, MLP_EPOCHS = [0], 1
+    _i = rng.choice(len(Xtr), 20000, replace=False)
+    _pv, _pt, _ = fit_mlp(Xtr[_i], ytr[_i], False)
+    assert len(_pt) == len(yte) and np.isfinite(_pt).all(), "MLP self-check failed"
+    MLP_SEEDS, MLP_EPOCHS = _keep
+    out("self-check: neural network path OK")
 if not (len(done) and "persistence" in set(done.key)):
     record("persistence", va.dist_l0.values, te.dist_l0.values, "no model")
 lgb_trees = None
