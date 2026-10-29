@@ -198,7 +198,41 @@ All trained on 1981–2010; decision threshold chosen on 2011–2015 to maximise
 - **Top-10% recall:** share of the 10% most severe test extremes that are caught; where EVT guidance should matter most.
 - **Tail consistency of each synthetic set:** GPD refit on its *z*, quantiles, and KS distance to the fitted tail.
 
-*Results to be added when the run finishes.*
+**Results (test 2016–2025, ~2.9 M training rows, 257,248 synthetic extremes per generator)**
+
+| Training data | PR-AUC | Recall | Onset PR-AUC | Onset recall | Top-10% recall |
+|---|---|---|---|---|---|
+| Persistence (no model) | 0.586 | 0.60 | 0.191 | 0.03 | 0.84 |
+| Real only | 0.576 | 0.51 | 0.228 | 0.09 | 0.81 |
+| SMOTE | 0.581 | 0.52 | 0.221 | 0.03 | 0.80 |
+| CTGAN, vanilla | 0.584 | 0.54 | 0.199 | 0.08 | 0.82 |
+| CTGAN, physical filter | 0.582 | 0.51 | 0.193 | 0.07 | 0.81 |
+| CTGAN, EVT-guided | 0.571 | 0.50 | 0.202 | 0.11 | 0.79 |
+
+- **Only 15.9% of vanilla CTGAN rows were physically possible.**
+- EVT resampling made the synthetic severity follow the fitted GPD (KS distance 0.16–0.24 → 0.017–0.023, as close as the real data), but the GAN never generated the far tail, so EVT could only re-weight what was there.
+- Classification: all methods within ~0.015 PR-AUC of each other.
+
+## 7b. Step 5 — Tail-conditioned CTGAN and confidence intervals
+
+*Script: `steps/step5_tail_conditioned.py`.*
+
+CTGAN was conditioned on season × GPD severity bin, physics enforced by construction (rows snapped to real cells, distances computed exactly), and all methods were given **95% intervals by resampling whole test months**.
+
+- Intervals are about **±0.07 PR-AUC** and overlap almost completely: **no method (SMOTE, CTGAN, EVT, weights) is statistically better than real data alone, or than persistence.**
+- **Conditioning failed:** 70% of generated rows had a severity outside the requested bin. CTGAN only guarantees the conditioned label, not the continuous columns.
+- One small, significant effect: tilting towards the severe tail beat the same conditional GAN without EVT (+0.0045 PR-AUC, better in 98% of resamples).
+
+## 7c. What the literature says, and the revised plan (Steps 6–8)
+
+- *To SMOTE, or not to SMOTE?* (Elor & Averbuch-Elor, 2022): balancing does not help **strong** classifiers such as gradient boosting, but does help weaker ones. This explains Steps 4–5.
+- Recent tabular work (AAAI 2025) finds **diffusion models generate better minority samples than GANs**; tail-aware losses in tabular diffusion help on fraud data (2026).
+- EVT + generative models (ExGAN, evtGAN, heavy-tailed diffusion) exist, but almost none test whether the generated extremes improve a **classifier**. That is this project's gap.
+
+Revised plan:
+1. **Step 6:** dataset v3 with longer-history features (7/14/30-day anomalies, warm-spell length, days since last extreme, rain and soil moisture over weeks, pressure trend).
+2. **Step 7:** our own conditional **tabular diffusion** model where severity is a direct input, so EVT chooses exactly which severities are generated, including beyond the largest observed event up to the GPD bound. Variants: observed severities (no EVT), GPD severities (EVT), GPD with tail emphasis; plus a CTGAN baseline. A "control check" verifies generated rows match the requested severity.
+3. **Step 8:** LightGBM **and** a neural-network classifier, all rebalancing methods, scored on all days, onset days and the **10% most severe extremes**, with month-block intervals and paired tests (EVT vs no-EVT, same generator).
 
 ---
 
