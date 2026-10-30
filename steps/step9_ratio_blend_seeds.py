@@ -1,6 +1,7 @@
 # ============================================================================
 # STEP 9: HOW MUCH SYNTHETIC DATA, BLENDING, AND SEED CHECK
-# Paste into ONE Colab cell. T4 GPU runtime recommended. ~60-90 min.
+# Paste into ONE Colab cell. T4 GPU: everything, ~80-100 min.
+# CPU only (GPU limit reached): LightGBM part only, ~60-75 min; re-run on GPU later to add the MLP.
 # Re-run the same cell after a disconnect: finished models are skipped.
 #
 # Why: Step 8 added 8.7 synthetic extremes per real one. EVT diffusion then gave LightGBM
@@ -43,7 +44,7 @@ LOCAL, LOCAL_PRED = "/content/local_v3", "/content/local_v3/preds9"
 DEV = "cuda" if torch.cuda.is_available() else "cpu"
 GEN = ["ddpm_emp", "ddpm_evt", "ddpm_evt_tail"]
 RATIOS = ["0.25", "0.5", "1", "full"]          # synthetic extremes per real extreme
-CLASSIFIERS = ["lgbm", "mlp"]
+CLASSIFIERS = ["lgbm", "mlp"] if DEV == "cuda" else ["lgbm"]   # no GPU: LightGBM part only; re-run later on GPU to add the MLP
 SEED, EXTRA_SEEDS = 42, [1, 2]
 MLP_SEEDS, MLP_EPOCHS = [0, 1], 6
 BLEND_W = np.round(np.linspace(0, 1, 11), 2)
@@ -124,6 +125,9 @@ def section(t):
 
 
 out(f"STEP 9  {time.strftime('%Y-%m-%d %H:%M')}  device={DEV}")
+if "mlp" not in CLASSIFIERS:
+    out("NOTE: no GPU, so this run does the LightGBM part only. Re-run the same cell on a GPU later:")
+    out("      finished LightGBM models are kept and only the MLP part is added.")
 
 # ================================================================ 1. data
 section("1. DATA")
@@ -323,9 +327,10 @@ def run(clf, m, r="-", seed=SEED):
 _X, _y = training_set("ddpm_evt", "0.25", SEED)
 assert len(_y) == len(ytr) + round(0.25 * n_pos) and _y[len(ytr):].all(), "training_set check failed"
 del _X, _y
-_i = rng.choice(len(Xtr), 20000, replace=False)
-_pv, _pt, _ = fit_mlp(Xtr[_i], ytr[_i], seeds=[0], epochs=1)
-assert len(_pt) == len(yte) and np.isfinite(_pt).all(), "MLP self-check failed"
+if "mlp" in CLASSIFIERS:
+    _i = rng.choice(len(Xtr), 20000, replace=False)
+    _pv, _pt, _ = fit_mlp(Xtr[_i], ytr[_i], seeds=[0], epochs=1)
+    assert len(_pt) == len(yte) and np.isfinite(_pt).all(), "MLP self-check failed"
 _b = 0.5 * logit(np.array([0.1, 0.9])) + 0.5 * logit(np.array([0.2, 0.8]))
 assert _b[0] < 0 < _b[1], "blend check failed"
 out("self-checks OK")
@@ -357,7 +362,7 @@ out(sweep.to_string(index=False))
 out(f"persistence: PR-AUC {D.loc['persistence', 'pr_auc']}  onset {D.loc['persistence', 'onset_pr_auc']}  "
     f"severe {D.loc['persistence', 'severe_pr_auc']}")
 
-fig, axs = plt.subplots(2, 3, figsize=(15, 8))
+fig, axs = plt.subplots(len(CLASSIFIERS), 3, figsize=(15, 4 * len(CLASSIFIERS)), squeeze=False)
 xs = [0.25, 0.5, 1, len(SYN["ddpm_evt"]) / n_pos]
 for i, clf in enumerate(CLASSIFIERS):
     for j, (s, lab) in enumerate([("pr_auc", "PR-AUC"), ("onset_pr_auc", "onset PR-AUC"), ("severe_pr_auc", "severe PR-AUC")]):
@@ -397,12 +402,13 @@ for s in [SEED] + EXTRA_SEEDS:
 # ================================================================ 4. blending
 section("4. BLENDING (logit average, weight on the 2nd model chosen on validation)")
 BLENDS = []
-for base in ("lgbm/none", "mlp/none"):
-    for m in GEN:
-        BLENDS.append((base, SEL[("lgbm", m)]))
-    for m in GEN:
-        BLENDS.append((base, SEL[("mlp", m)]))
-BLENDS.append(("mlp/none", "lgbm/none"))                 # control: two plain models, no synthetic data
+BASES = [f"{c}/none" for c in CLASSIFIERS]
+for base in BASES:
+    for clf in CLASSIFIERS:
+        for m in GEN:
+            BLENDS.append((base, SEL[(clf, m)]))
+if "mlp" in CLASSIFIERS:
+    BLENDS.append(("mlp/none", "lgbm/none"))             # control: two plain models, no synthetic data
 BLENDS = list(dict.fromkeys(BLENDS))
 BKEY = {}
 for a, b in BLENDS:
@@ -426,7 +432,7 @@ out(D.loc[list(BKEY.values()), ["val_score", "pr_auc", "onset_pr_auc", "severe_p
 
 # ================================================================ 5. intervals and paired tests
 section(f"5. 95% INTERVALS ({BOOT} resamples of whole test months) AND PAIRED TESTS")
-keys = ["persistence", "lgbm/none", "mlp/none"] + list(dict.fromkeys(SEL.values())) + list(BKEY.values())
+keys = ["persistence"] + BASES + list(dict.fromkeys(SEL.values())) + list(BKEY.values())
 P = {k: (te.dist_l0.values if k == "persistence" else load_pred(k)[1]) for k in keys}
 months = te.month.values
 um, inv = np.unique(months, return_inverse=True)
@@ -468,11 +474,12 @@ cmp = []
 for clf in CLASSIFIERS:
     e, t, p = SEL[(clf, "ddpm_evt")], SEL[(clf, "ddpm_evt_tail")], SEL[(clf, "ddpm_emp")]
     cmp += [(e, p), (t, p), (e, f"{clf}/none"), (t, f"{clf}/none"), (p, f"{clf}/none")]
-for base in ("lgbm/none", "mlp/none"):
+for base in BASES:
     be, bt, bp = (BKEY[(base, SEL[("lgbm", m)])] for m in ("ddpm_evt", "ddpm_evt_tail", "ddpm_emp"))
     cmp += [(be, bp), (bt, bp), (be, base), (be, "persistence")]
-cmp += [(BKEY[("mlp/none", SEL[("lgbm", "ddpm_evt")])], BKEY[("mlp/none", "lgbm/none")]),
-        (BKEY[("mlp/none", "lgbm/none")], "mlp/none")]
+if "mlp" in CLASSIFIERS:
+    cmp += [(BKEY[("mlp/none", SEL[("lgbm", "ddpm_evt")])], BKEY[("mlp/none", "lgbm/none")]),
+            (BKEY[("mlp/none", "lgbm/none")], "mlp/none")]
 pairs = []
 for a, b in dict.fromkeys(cmp):
     if a == b:
