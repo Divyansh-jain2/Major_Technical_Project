@@ -6,3 +6,4 @@ report/*.aux
 report/*.toc
 report/*.out
 report/*.pdf
+report/report.pdf

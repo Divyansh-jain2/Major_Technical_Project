@@ -177,7 +177,7 @@ All trained on 1981–2010; decision threshold chosen on 2011–2015 to maximise
 
 ---
 
-## 7. Step 4 — Vanilla vs EVT-guided CTGAN (running)
+## 7. Step 4 — Vanilla vs EVT-guided CTGAN
 
 *Script: `steps/step4_ctgan_evt.py`. Output: `results/step4/`.*
 
@@ -235,6 +235,33 @@ Revised plan:
 3. **Step 8:** LightGBM **and** a neural-network classifier, all rebalancing methods, scored on all days, onset days and the **10% most severe extremes**, with month-block intervals and paired tests (EVT vs no-EVT, same generator).
 
 ---
+
+## 7d. Step 7 — EVT-guided conditional diffusion
+
+*Script: `steps/step7_evt_diffusion.py`.*
+
+- Our own **conditional tabular diffusion model** (residual MLP denoiser, cosine schedule, 15,000 steps, ~30 min on a T4) trained on the 29,604 real extremes. The condition is **season + severity z**, so EVT decides exactly which severities are generated.
+- **Physics by construction:** snap to a real cell, sort Tmin ≤ Tmean ≤ Tmax, clip ranges, compute distance features exactly (only 0–0.2% of rows needed reordering, vs 13–31% for CTGAN).
+- Three sets from one model: `ddpm_emp` (real severities, no EVT), `ddpm_evt` (GPD severities), `ddpm_evt_tail` (half GPD, half from its upper 20%).
+- **Control check** (does the row match the requested severity? Spearman): real 0.78, diffusion 0.62–0.67, CTGAN 0.04.
+
+## 7e. Steps 8–10 — results
+
+| Step | What | Finding |
+|---|---|---|
+| 8 | all methods, LightGBM + MLP, one seed | EVT diffusion fixed LightGBM's weakness on the most severe extremes (0.46 → 0.58), but hurt onset at 8.7 synthetic per real; all synthetic data hurt the MLP; CTGAN worst |
+| 9 | ratio sweep 0.25/0.5/1/full, blends, 3 seeds | best on validation: EVT-tail at 1 synthetic per real; the Step 8 "EVT vs no-EVT" gain **changed sign across seeds** (luck) |
+| 10 | 5 seeds per setting, seed-averaged ensembles | **EVT-tail (1) beats no-EVT (1) on severe days in 5/5 seeds (+0.066) and real-only in 5/5 (+0.138)**; plain GPD sampling does not help |
+
+**Final model (5-seed average, LightGBM + EVT-tail diffusion at 1:1), test 2016–2025:**
+
+| Model | PR-AUC | Onset | Severe |
+|---|---|---|---|
+| Persistence | 0.586 | 0.191 | 0.565 |
+| Real only (5-seed average) | 0.599 | 0.235 | 0.441 |
+| **EVT-tail diffusion (5-seed average)** | **0.609** (beats persistence in 97% of resamples) | **0.228** (100%) | **0.579** (tie) |
+
+The validation rule picked a blend with EVT-tail at the full ratio (validation score within 0.001 of the 1:1 models; test 0.600 / 0.215 / 0.560). Full write-up: `report/report.tex`.
 
 ## 8. Limitations so far
 - **Labels come from a reanalysis**, not stations. Station checks (GSOD: Shimla, Sundernagar, Bhuntar, 2016–2025) are planned but not yet run.
