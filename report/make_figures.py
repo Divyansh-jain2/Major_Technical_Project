@@ -196,3 +196,34 @@ ax.legend(handles=[Line2D([], [], marker="o", ls="", color=MUTED, label="interpo
 ax.set_title("More realistic synthetic days did not help more", loc="left")
 save(fig, "fig_realism.png")
 print("figures written to", FIG)
+
+# ---------------------------------------------------------------- Step 13: EVT emphasis with and without a generator
+d13 = pd.read_csv(os.path.join(HERE, "data", "step13_per_seed.csv"))
+both = pd.concat([d[d.method.isin(["none", "ctgan_tail", "tvae_tail", "gaussian_copula_tail", "diffusion_tail"])], d13])
+M13 = [("none", "Real\nonly", MUTED), ("real_dup_plain", "Random\ncopies", AQUA), ("real_dup_tail", "EVT-tail\ncopies", AQUA),
+       ("real_weight_tail", "EVT-tail\nweights", AQUA), ("gaussian_copula_tail", "Gaussian\ncopula", ORANGE),
+       ("diffusion_tail", "Diffusion", ORANGE), ("ctgan_tail", "CTGAN", ORANGE), ("tvae_tail", "TVAE", ORANGE)]
+fig, axs = plt.subplots(3, 1, figsize=(9.5, 9), sharex=True)
+for ax, (s, lab) in zip(axs, [("severe", "Severe PR-AUC (10% most severe extremes)"), ("pr_auc", "PR-AUC (all days)"),
+                              ("onset", "Onset PR-AUC (heatwave starts)")]):
+    for i, (m, nm, c) in enumerate(M13):
+        v = both[both.method == m][s].values
+        ax.scatter(np.full(len(v), i), v, s=18, color=c, alpha=0.85, zorder=3)
+        ax.hlines(v.mean(), i - 0.3, i + 0.3, color=c if c != MUTED else INK2, lw=2.5, zorder=4)
+    ax.axhline(PERS[s], color=INK2, ls=":", lw=1.3)
+    ax.axvline(3.5, color=GRID, lw=1.2)
+    ax.set_title(lab, loc="left", fontsize=10)
+    ax.grid(axis="x", visible=False)
+axs[-1].set_xticks(range(len(M13)), [m[1] for m in M13], fontsize=9)
+axs[0].annotate("persistence", (3.4, PERS["severe"]), xytext=(0, 4), textcoords="offset points", fontsize=8, color=INK2, ha="right")
+axs[0].text(1.5, 0.385, "no generator", ha="center", fontsize=8.5, color=INK2)
+axs[0].text(5.5, 0.385, "generator + EVT tail focus", ha="center", fontsize=8.5, color=INK2)
+axs[0].legend(handles=[Line2D([], [], marker="o", ls="", color=MUTED, label="real data only"),
+                       Line2D([], [], marker="o", ls="", color=AQUA, label="extra real extremes (copies or weights)"),
+                       Line2D([], [], marker="o", ls="", color=ORANGE, label="extra synthetic extremes")],
+              loc="lower left", bbox_to_anchor=(0, 1.1), fontsize=8.5, ncol=3)
+fig.suptitle("Step 13: EVT tail emphasis with and without a generator (5 seeds; bar = mean)",
+             x=0.01, y=1.0, ha="left", fontweight="bold", color=INK)
+fig.tight_layout()
+save(fig, "fig_step13.png")
+print("step 13 figure written")

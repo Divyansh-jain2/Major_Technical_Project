@@ -1,0 +1,16 @@
+method,seed,pr_auc,onset,severe
+real_dup_plain,42,0.5963,0.234,0.426
+real_dup_tail,42,0.6059,0.2283,0.4987
+real_weight_tail,42,0.5992,0.2388,0.4701
+real_dup_plain,1,0.6089,0.2373,0.513
+real_dup_tail,1,0.611,0.2384,0.5257
+real_weight_tail,1,0.6025,0.2345,0.4837
+real_dup_plain,2,0.59,0.2277,0.414
+real_dup_tail,2,0.6065,0.2341,0.5197
+real_weight_tail,2,0.6022,0.232,0.4979
+real_dup_plain,3,0.5982,0.2249,0.4548
+real_dup_tail,3,0.6084,0.2295,0.5218
+real_weight_tail,3,0.5939,0.2328,0.4291
+real_dup_plain,4,0.6062,0.2344,0.5105
+real_dup_tail,4,0.61,0.2369,0.5384
+real_weight_tail,4,0.6005,0.2374,0.4525

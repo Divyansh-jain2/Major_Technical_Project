@@ -6,7 +6,6 @@
 % Compile: pdflatex report.tex (twice). Figures are in report/figures/:
 %   evt_qq_std.png, ratio_sweep.png, seed_spread.png, pr_curves.png  (from the Colab steps)
 %   fig_*.png                                                        (python3 report/make_figures.py)
-% Parts still to be filled in are marked \pending (Step 13).
 % =============================================================================
 \documentclass[11pt,a4paper]{article}
 \usepackage[margin=2.3cm]{geometry}
@@ -63,8 +62,11 @@ without EVT tail focus, over five seeds. EVT tail focus improved every generator
 heatwave onsets (better in 4--5 of 5 seeds for all six generators). The best methods, CTGAN and TVAE with
 EVT tail focus, reached severe PR-AUC 0.601 (real data only: 0.441) and beat a strong persistence
 baseline on overall skill (0.611 vs 0.586, better in 99\% of month-block resamples). The most realistic
-synthetic data (diffusion) was not the most useful. \textbf{Part III} (in progress) tests whether the gain
-needs a generator at all, or comes from the EVT tail emphasis alone.
+synthetic data (diffusion) was not the most useful. \textbf{Part III} shows that the EVT tail emphasis works
+even without a generator: copies of real extremes chosen with the EVT tail target beat random copies on severe
+days in 5 of 5 seeds (+0.057) and gave the highest overall PR-AUC of the study (0.613), while generators with
+EVT tail focus added a further +0.06 on the most severe days (5 of 5 seeds) at the price of onset skill
+($-0.02$, 5 of 5 seeds).
 \end{abstract}
 
 \tableofcontents
@@ -134,7 +136,7 @@ resources, reads only earlier outputs and writes to its own folder.
         training seeds).
   \item \textbf{Part II (Steps 11--12)} keeps LightGBM fixed and compares ten generation methods, each with
         and without EVT tail focus.
-  \item \textbf{Part III (Step 13, in progress)} tests whether the EVT emphasis works without any generator.
+  \item \textbf{Part III (Step 13)} tests whether the EVT emphasis works without any generator.
 \end{itemize}
 
 \subsection{Related work}
@@ -720,8 +722,8 @@ whether each synthetic day is a plausible weather situation. Interpolation metho
 and cannot move beyond the observed extremes, which explains their small effect.
 
 % =============================================================================
-\part*{Part III: Is a generator needed? (in progress)}
-\addcontentsline{toc}{part}{Part III: Is a generator needed? (in progress)}
+\part*{Part III: Is a generator needed?}
+\addcontentsline{toc}{part}{Part III: Is a generator needed?}
 
 \section{Control experiment: EVT tail emphasis without a generator (Step 13)}
 \subsection{Motivation and design}
@@ -741,34 +743,101 @@ that use only real data:
 They are compared with real data only, the four best EVT-tail generators of Step 12 and persistence.
 
 \subsection{Results}
-\todobox{Fill in from \texttt{results/step13/step13\_summary.txt} when Step 13 has finished, and add the figure
-\texttt{generator\_vs\_reweighting.png}.}
+\begin{figure}[H]
+\centering
+\optfig{figures/fig_step13.png}{0.92\linewidth}
+\caption{Step 13: LightGBM test scores per training seed (dots) and mean (bar). Green: extra copies or
+weights of real extremes only; orange: extra synthetic extremes with EVT tail focus (from Step 12). Dotted:
+persistence.}
+\label{fig:step13}
+\end{figure}
 
 \begin{table}[H]
 \centering\small
-\caption{Step 13, five training seeds: test mean $\pm$ standard deviation.}\label{tab:step13}
-\begin{tabular}{@{}lrrr@{}}
+\caption{Step 13, five training seeds: test mean $\pm$ standard deviation, and the number of seeds in which the
+method beats real data only.}\label{tab:step13}
+\begin{tabular}{@{}lrrrrrr@{}}
 \toprule
-Method & PR-AUC & Onset PR-AUC & Severe PR-AUC\\
+Method & \multicolumn{2}{c}{PR-AUC} & \multicolumn{2}{c}{Onset PR-AUC} & \multicolumn{2}{c}{Severe PR-AUC}\\
 \midrule
-Real data only & $0.586\pm0.007$ & $0.226\pm0.005$ & $0.411\pm0.042$\\
-Random oversampling & \pending & \pending & \pending\\
-EVT-tail oversampling & \pending & \pending & \pending\\
-EVT-tail weighting & \pending & \pending & \pending\\
-CTGAN + EVT tail & $0.602\pm0.004$ & $0.213\pm0.002$ & $0.581\pm0.009$\\
-TVAE + EVT tail & $0.603\pm0.003$ & $0.215\pm0.005$ & $0.583\pm0.011$\\
-Gaussian copula + EVT tail & $0.603\pm0.007$ & $0.221\pm0.003$ & $0.546\pm0.034$\\
-Diffusion + EVT tail & $0.601\pm0.004$ & $0.222\pm0.006$ & $0.549\pm0.020$\\
-Persistence (no model) & 0.586 & 0.191 & 0.565\\
+Real data only & $0.586\pm0.007$ & -- & $0.226\pm0.005$ & -- & $0.411\pm0.042$ & --\\
+\rowcolor{teal!7} Random oversampling & $0.600\pm0.008$ & 5/5 & $0.232\pm0.005$ & 5/5 & $0.464\pm0.046$ & 4/5\\
+\rowcolor{teal!7} EVT-tail oversampling & $\mathbf{0.608\pm0.002}$ & 5/5 & $0.233\pm0.004$ & 5/5 & $0.521\pm0.014$ & 5/5\\
+\rowcolor{teal!7} EVT-tail weighting & $0.600\pm0.004$ & 5/5 & $\mathbf{0.235\pm0.003}$ & 5/5 & $0.467\pm0.027$ & 5/5\\
+CTGAN + EVT tail & $0.602\pm0.004$ & 5/5 & $0.213\pm0.002$ & 0/5 & $0.581\pm0.009$ & 5/5\\
+TVAE + EVT tail & $0.603\pm0.003$ & 5/5 & $0.215\pm0.005$ & 0/5 & $\mathbf{0.583\pm0.011}$ & 5/5\\
+Gaussian copula + EVT tail & $0.603\pm0.007$ & 5/5 & $0.221\pm0.003$ & 1/5 & $0.546\pm0.034$ & 5/5\\
+Diffusion + EVT tail & $0.601\pm0.004$ & 5/5 & $0.222\pm0.006$ & 1/5 & $0.549\pm0.020$ & 5/5\\
+\midrule
+Persistence (no model) & 0.586 & & 0.191 & & 0.565 & \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{How the result will be read.}
-If EVT-tail oversampling or weighting matches the best generators, the active ingredient is the EVT tail
-emphasis, and generators add little for this classifier. If the generators clearly win, generating new days adds
-value beyond re-weighting the real extremes. EVT-tail against random oversampling isolates the effect of EVT
-without any generator. Interpretation: \pending.
+\begin{table}[H]
+\centering\small
+\caption{Key comparisons. Same-seed: mean difference over five seeds (seeds in which the first is better).
+Seed-averaged: difference of the five-model ensembles (share of 200 month resamples in which the first is
+better; $\ge0.95$ convincing win, $\le0.05$ convincing loss).}\label{tab:step13cmp}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+ & \multicolumn{3}{c}{Same-seed difference} & \multicolumn{3}{c}{Seed-averaged difference}\\
+\cmidrule(lr){2-4}\cmidrule(l){5-7}
+Comparison & PR-AUC & Onset & Severe & PR-AUC & Onset & Severe\\
+\midrule
+EVT-tail copies vs random copies & $+0.008$ (5/5) & $+0.002$ (4/5) & $\mathbf{+0.057}$ \textbf{(5/5)} & $+0.005$ (0.96) & $+0.001$ (0.63) & $\mathbf{+0.037}$ \textbf{(1.00)}\\
+EVT-tail copies vs real only & $+0.022$ (5/5) & $+0.008$ (5/5) & $+0.110$ (5/5) & $+0.014$ (0.99) & $+0.005$ (0.83) & $+0.080$ (1.00)\\
+EVT-tail weights vs real only & $+0.013$ (5/5) & $+0.009$ (5/5) & $+0.056$ (5/5) & $+0.006$ (0.98) & $+0.006$ (0.89) & $+0.040$ (0.99)\\
+CTGAN + EVT tail vs EVT-tail copies & $-0.007$ (0/5) & $-0.021$ (0/5) & $+0.060$ (5/5) & $-0.003$ (0.34) & $-0.016$ (0.00) & $+0.068$ (0.93)\\
+TVAE + EVT tail vs EVT-tail copies & $-0.006$ (0/5) & $-0.019$ (0/5) & $+0.062$ (5/5) & $-0.004$ (0.34) & $-0.019$ (0.00) & $+0.066$ (0.90)\\
+Diffusion + EVT tail vs EVT-tail copies & $-0.007$ (0/5) & $-0.011$ (0/5) & $+0.028$ (4/5) & $-0.006$ (0.28) & $-0.010$ (0.01) & $+0.038$ (0.84)\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Seed-averaged models against persistence: test scores and share of month resamples in which the model
+is better (PR-AUC / onset / severe).}\label{tab:step13pers}
+\begin{tabular}{@{}lrrrrl@{}}
+\toprule
+Method & Validation & PR-AUC & Onset & Severe & vs persistence\\
+\midrule
+Real data only & 0.541 & 0.599 & 0.235 & 0.441 & 0.77 / 1.00 / 0.05\\
+Random oversampling & 0.551 & 0.608 & 0.238 & 0.492 & 0.90 / 1.00 / 0.14\\
+EVT-tail oversampling & 0.567 & \textbf{0.613} & 0.239 & 0.530 & 0.96 / 1.00 / 0.30\\
+EVT-tail weighting & 0.571 & 0.604 & \textbf{0.240} & 0.481 & 0.85 / 1.00 / 0.14\\
+CTGAN + EVT tail & \textbf{0.600} & 0.611 & 0.223 & \textbf{0.601} & 0.99 / 0.97 / 0.91\\
+TVAE + EVT tail & \textbf{0.600} & 0.610 & 0.220 & \textbf{0.601} & 0.99 / 0.99 / 0.88\\
+Gaussian copula + EVT tail & 0.599 & 0.608 & 0.225 & 0.558 & 0.97 / 0.99 / 0.46\\
+Diffusion + EVT tail & 0.594 & 0.609 & 0.228 & 0.579 & 0.97 / 1.00 / 0.67\\
+\midrule
+Persistence (no model) & 0.577 & 0.586 & 0.191 & 0.565 & --\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{What the control shows}
+\begin{enumerate}
+  \item \textbf{EVT works without a generator.} Copying real extremes chosen with the EVT tail target beats copying
+        random real extremes on severe days in every seed (+0.057) and in every month resample of the seed-averaged
+        models. The EVT tail emphasis is therefore an active ingredient on its own.
+  \item \textbf{The cheapest method is the best all-rounder.} EVT-tail oversampling of real extremes gives the highest
+        overall PR-AUC of the whole study (0.608 per seed, 0.613 seed-averaged), better onset skill than real data
+        only, and the second-smallest seed-to-seed spread, with no generator to train.
+  \item \textbf{Generators add the far tail.} CTGAN and TVAE with EVT tail focus are better than EVT-tail copies on the
+        most severe days in all five seeds (about +0.06). Copies can only repeat the most severe real days, whereas
+        generators place new extremes beyond them; only the generator-based models beat persistence on severe days.
+  \item \textbf{The price is onset skill.} The same generators are worse on heatwave onsets in all five seeds (about
+        $-0.02$; a convincing loss for the seed-averaged models). Synthetic extremes pull the classifier towards the
+        ``already very hot'' region and away from the start of new events.
+  \item \textbf{Copies beat weights.} EVT-tail weighting adds the same total emphasis as EVT-tail copies but helps less
+        on severe days (0.467 vs 0.521). A likely reason is that LightGBM's minimum leaf size counts rows, not
+        weights: duplicated severe days can form their own leaves, single weighted days cannot.
+\end{enumerate}
+On the pre-specified validation score the generator-based models still rank first (CTGAN + EVT tail 0.600 against
+0.567 for EVT-tail copies), because the validation score includes severe skill.
 
 % =============================================================================
 \section{Discussion}
@@ -777,6 +846,13 @@ severities well, so drawing from it reproduces almost the same severities as the
 The useful role of EVT is to locate the sparse upper tail and to bound how far it extends: asking for 60\% of
 synthetic extremes from the upper 20\% of the GPD fills exactly the region where the classifier has too few
 examples. This held for every generator family in Part II.
+
+\paragraph{What a generator adds beyond EVT.} Part III separates two effects. The EVT tail emphasis itself---putting
+more weight on the rare severe days---improves the classifier even with copies of real days, and is the cheapest
+way to gain overall and onset skill. A generator adds something copies cannot: new extremes beyond the most severe
+observed days, which is what lifts severe-day skill above persistence. Which to use depends on the goal: a warning
+system that must not miss the most severe heat favours generator + EVT tail focus; an all-round forecast favours
+EVT-tail oversampling of real extremes.
 
 \paragraph{Realism versus usefulness.} The generator ranking for a fixed tree classifier differs from a ranking by
 realism. Diffusion is the only generator that follows a requested severity and produces nearly
@@ -813,6 +889,7 @@ choices made on a separate validation period.
         the judge rates synthetic rows as more severe than real ones, so their tail positions are approximate.
   \item The tail-focus setting (half from the upper 20\%) was fixed by hand; only the amount of synthetic data
         was chosen on validation.
+  \item The explanation of why copies beat weights (LightGBM's minimum leaf size counts rows) was not tested.
   \item One classifier family (LightGBM) and one case study; an MLP did not benefit from synthetic data.
   \item Free Colab resources (T4 GPU or two CPU cores) limited training data (half of 1981--2010), generator
         size and the number of seeds.
@@ -824,8 +901,10 @@ improves the prediction of the most severe next-day heat extremes in Himachal Pr
 training seeds. With a fixed LightGBM classifier, EVT tail focus improved every one of six generators, most
 consistently on heatwave onsets, and CTGAN and TVAE with EVT tail focus gave the best results (severe PR-AUC
 0.601 against 0.441 for real data only), beating a strong persistence baseline on overall and onset skill. The
-most realistic generator (diffusion) was not the most useful for the classifier. Whether a generator is needed
-at all, or the EVT emphasis alone suffices, is being tested (Part III): \pending.
+most realistic generator (diffusion) was not the most useful for the classifier. A control without any generator
+showed that the EVT tail emphasis is itself the main active ingredient: copies of real extremes chosen with the EVT
+tail target beat random copies on severe days in every seed and gave the best overall PR-AUC of the study, while
+generators with EVT tail focus added a further gain on the most severe days at the cost of heatwave-onset skill.
 
 Future work: station validation of the severe events; choosing the tail emphasis on validation; a GPD term
 inside generator training; spatial models that use neighbouring cells; longer lead times, where persistence is
