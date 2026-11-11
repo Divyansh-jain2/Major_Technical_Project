@@ -1,10 +1,12 @@
 % =============================================================================
 % Major Technical Project report
 % Extreme Value-Guided Deep Generative Models for Imbalanced Classification
-% Case study: next-day temperature extremes in Himachal Pradesh
+% Case study: next-day extreme heat in Himachal Pradesh
 %
-% Compile: pdflatex report.tex (twice). Figures are in report/figures/ (copied from
-% results/step3b, step8, step9 and step10 on Google Drive).
+% Compile: pdflatex report.tex (twice). Figures are in report/figures/:
+%   evt_qq_std.png, ratio_sweep.png, seed_spread.png, pr_curves.png  (from the Colab steps)
+%   fig_*.png                                                        (python3 report/make_figures.py)
+% Parts still to be filled in are marked \pending (Step 13).
 % =============================================================================
 \documentclass[11pt,a4paper]{article}
 \usepackage[margin=2.3cm]{geometry}
@@ -13,22 +15,28 @@
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{graphicx}
-\usepackage{xcolor}
+\usepackage[table]{xcolor}
 \usepackage{hyperref}
 \usepackage{caption}
 \usepackage{enumitem}
 \usepackage{siunitx}
 \usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit}
 \sisetup{detect-all}
 \setlist{nosep,leftmargin=1.4em}
 \hypersetup{colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black}
+\captionsetup{font=small,labelfont=bf}
 \newcommand{\optfig}[2]{%
   \IfFileExists{#1}{\includegraphics[width=#2]{#1}}%
   {\fbox{\parbox{0.8\linewidth}{\centering\small Figure file \texttt{\detokenize{#1}} not found.}}}}
 \newcommand{\win}[1]{\textbf{#1}}
+\newcommand{\pending}{\textcolor{orange!75!black}{\textit{pending}}}
+\newcommand{\todobox}[1]{\par\smallskip\noindent\fcolorbox{orange!75!black}{orange!6}{%
+  \parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\small\textbf{To be completed.} #1}}\par\smallskip}
 
 \title{\textbf{Extreme Value-Guided Deep Generative Models\\for Imbalanced Classification}\\[4pt]
-\large Case study: next-day temperature extremes in Himachal Pradesh, 1981--2025}
+\large Case study: next-day extreme heat in Himachal Pradesh, 1981--2025}
 \author{Divyansh Jain\\Major Technical Project}
 \date{\today}
 
@@ -36,81 +44,119 @@
 \maketitle
 
 \begin{abstract}
-The minority class in an imbalanced classification problem is often the extreme tail of the data, yet
-standard remedies (class weights, SMOTE) and generic deep generative models do not model tail behaviour.
-We treat the minority class as a tail phenomenon, describe its severity with a Generalized Pareto
-Distribution (GPD) fitted by peaks-over-threshold, and use this description to decide which synthetic
-minority examples a deep generative model produces. The case study is next-day extreme heat on a
-\ang{0.1} ERA5-Land grid over Himachal Pradesh (529 cells, 1981--2025, about 1\% positives), with
-season-wise extremes defined from 1981--2010 thresholds and a test decade (2016--2025) that contains
-twice as many extremes as the training period.
-After two GAN-based attempts (CTGAN with EVT resampling, and severity-conditioned CTGAN) failed to produce
-controllable or physically valid extremes, we built a conditional tabular diffusion model whose
-condition is the season and the standardised severity, so that EVT chooses exactly which severities are
-generated; physical consistency is enforced by construction.
-With LightGBM and five training seeds, adding one synthetic extreme per real one, with severities drawn
-from the fitted GPD with emphasis on its upper tail, raises PR-AUC on the most severe 10\% of test
-extremes from 0.411 to 0.549 (better in 5 of 5 seeds), and by 0.066 over the same diffusion model fed
-the empirical severities (5 of 5 seeds), without loss of overall or onset skill. The seed-averaged model
-reaches PR-AUC 0.609 against 0.586 for persistence (better in 97\% of month-block resamples) and onset
-PR-AUC 0.228 against 0.191 (100\%), while matching persistence on severe days. Sampling the GPD without
-tail emphasis, SMOTE, class weights and CTGAN give no reliable gain; large synthetic shares harm onset
-prediction; and a single training seed was shown to be insufficient to judge tail effects.
+In imbalanced classification the class of interest is rare and is often the extreme tail of the data.
+This project treats the minority class as a tail phenomenon, describes its severity with a Generalized
+Pareto Distribution (GPD) fitted by peaks-over-threshold, and uses this extreme value model to decide
+which synthetic minority examples a generative model should add to the training data. The case study is
+next-day extreme heat on a \ang{0.1} ERA5-Land grid over Himachal Pradesh: 529 cells, 1981--2025, about
+1\% positives, season-wise extremes defined from 1981--2010 thresholds, and a test decade (2016--2025)
+with twice as many extremes as the training period. The classifier is LightGBM, using the last days and
+weeks of weather.
+
+\textbf{Part I} develops the method: after GAN attempts that produced invalid or uncontrollable extremes,
+an EVT-guided conditional diffusion model with physics built in raised PR-AUC on the most severe 10\% of
+test extremes from 0.411 to 0.549 (better in 5 of 5 training seeds), but only when EVT was used to
+\emph{emphasise the upper tail}; drawing severities from the GPD as fitted gave no gain.
+\textbf{Part II} fixes the classifier and compares ten ways of generating extremes (SMOTE, Borderline-SMOTE,
+ADASYN, Gaussian copula, TVAE, CTGAN, CopulaGAN, a conditional WGAN-GP and diffusion), each with and
+without EVT tail focus, over five seeds. EVT tail focus improved every generator, most clearly on
+heatwave onsets (better in 4--5 of 5 seeds for all six generators). The best methods, CTGAN and TVAE with
+EVT tail focus, reached severe PR-AUC 0.601 (real data only: 0.441) and beat a strong persistence
+baseline on overall skill (0.611 vs 0.586, better in 99\% of month-block resamples). The most realistic
+synthetic data (diffusion) was not the most useful. \textbf{Part III} (in progress) tests whether the gain
+needs a generator at all, or comes from the EVT tail emphasis alone.
 \end{abstract}
 
 \tableofcontents
-\bigskip
+\newpage
 
-% -----------------------------------------------------------------------------
+% =============================================================================
 \section{Introduction}
-In imbalanced classification the class of interest is rare and therefore poorly learned. Common
-remedies re-weight the loss or create synthetic minority samples by interpolation
-(SMOTE~\cite{chawla2002smote}). Deep generative models such as GANs~\cite{goodfellow2014gan,xu2019ctgan}
-and diffusion models~\cite{ho2020ddpm,kotelnikov2023tabddpm} can produce richer synthetic data, but they
-are trained to match the bulk of the distribution and tend to under-represent its tails, which is where
-the minority class often lives. Extreme value theory (EVT)~\cite{coles2001} offers an asymptotically
-justified model for exactly that region.
+\subsection{Motivation}
+Extreme heat is one of the clearest signals of a warming climate, and in a mountain state such as
+Himachal Pradesh its effects reach agriculture, glaciers, water supply and health. Predicting
+\emph{tomorrow's} extreme heat at a given place is a classification problem in which the positive class is
+rare (about one day in a hundred) and in which the most important cases---the most severe days---are the
+rarest of all. Standard remedies re-weight the loss or create synthetic minority samples by interpolation
+(SMOTE~\cite{chawla2002smote}). Deep generative models such as GANs~\cite{goodfellow2014gan,xu2019ctgan},
+variational autoencoders and diffusion models~\cite{ho2020ddpm,kotelnikov2023tabddpm} can produce richer
+synthetic data, but they are trained to match the bulk of the distribution and tend to under-represent its
+tails. Extreme value theory (EVT)~\cite{coles2001} offers an asymptotically justified model for exactly
+that region.
 
-This project builds a framework that couples EVT with deep generative models so that synthetic minority
-data are statistically consistent with real extremes, and tests whether this improves a classifier:
+\subsection{Problem statement and objectives}
 \begin{enumerate}
-  \item treat the minority class as a tail phenomenon;
-  \item use EVT to characterise and constrain that tail;
-  \item use generative models to augment and rebalance the training data;
-  \item verify that the synthetic data reproduce the extreme behaviour, and that they help.
+  \item Treat the minority class as a tail phenomenon.
+  \item Use EVT to characterise and constrain the tail.
+  \item Use generative models to augment and rebalance the training data.
+  \item Ensure that synthetic data are statistically consistent with real extremes, and test whether they
+        improve a classifier.
 \end{enumerate}
+Following discussion with the supervisor, the final research question is: \emph{with one fixed classifier
+(LightGBM) predicting next-day extreme heat from the previous days and weeks, which way of generating extra
+extreme days helps most, and what does EVT add?}
 
-\paragraph{Contributions.}
+\subsection{Overview of the work}
+Figure~\ref{fig:pipeline} summarises the pipeline. Every step runs as one notebook cell on free Colab
+resources, reads only earlier outputs and writes to its own folder.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw=black!45, rounded corners=3pt, fill=#1, align=center, font=\small,
+              minimum height=1.05cm, text width=2.55cm, inner sep=3pt},
+  box/.default={black!3},
+  arr/.style={-{Stealth[length=2.2mm]}, thick, black!55},
+  lab/.style={font=\scriptsize\bfseries, text=black!60}]
+\node[box] (data) {ERA5-Land, SRTM\\529 cells, 45 years\\\scriptsize Steps 1--2};
+\node[box, right=0.55cm of data] (lab) {Seasonal heat\\labels, 57 features\\\scriptsize Steps 2, 6};
+\node[box=blue!6, right=0.55cm of lab] (evt) {EVT: GPD fit of\\standardised severity\\\scriptsize Step 3b};
+\node[box=orange!8, right=0.55cm of evt] (gen) {Generators +\\EVT tail focus\\\scriptsize Steps 4--7, 11};
+\node[box=black!3, below=1.0cm of gen] (clf) {Fixed LightGBM\\5 seeds, 1981--2010\\\scriptsize Steps 8--12};
+\node[box=black!3, left=0.55cm of clf] (test) {Test 2016--2025\\PR-AUC, onset, severe\\\scriptsize month bootstrap};
+\node[box=blue!6, left=0.55cm of test] (val) {Choices made on\\validation 2011--15};
+\node[box=orange!8, left=0.55cm of val] (ctrl) {Control: EVT without\\a generator\\\scriptsize Step 13};
+\draw[arr] (data) -- (lab);
+\draw[arr] (lab) -- (evt);
+\draw[arr] (evt) -- (gen);
+\draw[arr] (gen) -- (clf);
+\draw[arr] (clf) -- (test);
+\draw[arr] (val) -- (test);
+\draw[arr, dashed] (ctrl) -- (val);
+\end{tikzpicture}
+\caption{Project pipeline. Blue: extreme value modelling and validation; orange: synthetic data.}
+\label{fig:pipeline}
+\end{figure}
+
 \begin{itemize}
-  \item A case study with a demanding, realistic set-up: per-cell, per-season heat extremes on a
-        45-year \ang{0.1} grid, a strict temporal split and a non-stationary test decade.
-  \item A standardisation of excesses by each cell's own variability that turns spuriously heavy pooled
-        tails into the bounded tails expected for temperature (Section~\ref{sec:evt}).
-  \item An EVT-guided conditional tabular diffusion model in which the GPD decides which severities are
-        generated, with physics enforced by construction and a direct check that generated rows match
-        the requested severity (Section~\ref{sec:diff}).
-  \item A careful evaluation: onset and severe-extreme scores, month-block bootstrap intervals, paired
-        tests, a same-generator ablation (EVT vs no EVT), a ratio sweep and a five-seed check, with all
-        choices made on a validation period (Section~\ref{sec:results}).
+  \item \textbf{Part I (Steps 1--10)} builds the data, the EVT model and an EVT-guided diffusion generator,
+        and establishes how to evaluate fairly (onset and severe scores, validation-only choices, several
+        training seeds).
+  \item \textbf{Part II (Steps 11--12)} keeps LightGBM fixed and compares ten generation methods, each with
+        and without EVT tail focus.
+  \item \textbf{Part III (Step 13, in progress)} tests whether the EVT emphasis works without any generator.
 \end{itemize}
 
-\paragraph{Related work.}
+\subsection{Related work}
 Elor and Averbuch-Elor~\cite{elor2022smote} found that balancing rarely helps strong classifiers such as
-gradient-boosted trees, which matches our baselines. D'souza et al.~\cite{dsouza2025overlap} report that
-tabular diffusion produces better minority samples than GANs. On the EVT side, ExGAN~\cite{bhatia2021exgan}
-generates extreme samples of a chosen severity, evtGAN~\cite{boulaguiem2022evtgan} combines GANs with
-extreme-value margins and dependence for spatial weather extremes, and heavy-tailed diffusion
-models~\cite{pandey2025heavy} change the noise distribution to reach far tails. Jalalzai et
-al.~\cite{jalalzai2018extreme} study classification in extreme regions of the input space. These works
-generate or classify extremes; few test whether EVT-consistent synthetic extremes improve a downstream
-classifier, which is the question addressed here. For extreme-heat forecasting, neural weather models
-are known to under-predict the most extreme events~\cite{lopezgomez2023heat}.
+gradient-boosted trees. D'souza et al.~\cite{dsouza2025overlap} report that tabular diffusion produces
+better minority samples than GANs. On the EVT side, ExGAN~\cite{bhatia2021exgan} generates extreme samples
+of a chosen severity, evtGAN~\cite{boulaguiem2022evtgan} combines GANs with extreme-value margins for
+spatial weather extremes, and heavy-tailed diffusion models~\cite{pandey2025heavy} change the noise
+distribution to reach far tails. Jalalzai et al.~\cite{jalalzai2018extreme} study classification in
+extreme regions of the input space. For extreme-heat forecasting, neural weather models are known to
+under-predict the most extreme events~\cite{lopezgomez2023heat}. Few works test whether EVT-consistent
+synthetic extremes improve a downstream classifier, or compare generator families under a fixed
+classifier for a geophysical tail problem; this report does both.
 
-% -----------------------------------------------------------------------------
+% =============================================================================
+\part*{Part I: Data, extreme value model and an EVT-guided generator}
+\addcontentsline{toc}{part}{Part I: Data, extreme value model and an EVT-guided generator}
+
 \section{Data}
 \subsection{Sources}
-Table~\ref{tab:sources} lists the data used. Raw files are never modified; every processing step
-reads earlier outputs and writes to its own folder.
+Table~\ref{tab:sources} lists the data used. Raw files are never modified; every processing step reads
+earlier outputs and writes to its own folder.
 
 \begin{table}[H]
 \centering\small
@@ -119,8 +165,8 @@ reads earlier outputs and writes to its own folder.
 \toprule
 Source & Content & Period, grid & Role \\
 \midrule
-ERA5-Land~\cite{munoz2021era5land} & Tmax, Tmin, Tmean, dewpoint, pressure, soil moisture, rain,
-  solar radiation & 1981--2025, \ang{0.1} & labels, features \\
+ERA5-Land~\cite{munoz2021era5land} & Tmax, Tmin, Tmean, dewpoint, humidity, pressure, soil moisture,
+  rain, solar radiation & 1981--2025, \ang{0.1} & labels, features \\
 SRTM & elevation, slope & \SI{30}{m} & terrain features \\
 GADM boundary & state outline & -- & mask (529 cells) \\
 IMD gridded temperature & Tmax, Tmin from stations & 1981--2025, \ang{1} & regional check only \\
@@ -129,79 +175,69 @@ GSOD stations & Shimla, Sundernagar, Bhuntar & 2016--2025 & planned point check 
 \end{tabular}
 \end{table}
 
-ERA5-Land is the only source that is complete for 45 years at a resolution fine enough for
-mountainous terrain. It has absolute biases on steep slopes, but our labels compare each grid cell with
-its own history, so a constant bias shifts the threshold and not the set of extreme days.
+ERA5-Land is the only source that is complete for 45 years at a resolution fine enough for mountainous
+terrain. It has absolute biases on steep slopes, but our labels compare each grid cell with its own
+history, so a constant bias shifts the threshold and not the set of extreme days.
 
 \subsection{Pre-processing and verification}
-All inputs are on ERA5-Land's \ang{0.1} grid over \ang{30.3}--\ang{33.3}N, \ang{75.5}--\ang{79.1}E;
-accumulated variables (rain, radiation) are shifted back by the one day by which ERA5-Land stamps them
-late; SRTM is averaged into cell elevation and slope; cells outside the state are masked, leaving 529
-cells and 16{,}436 days. The processed file was verified against the raw ERA5-Land files for five cells
+All inputs are on ERA5-Land's \ang{0.1} grid over \ang{30.3}--\ang{33.3}N, \ang{75.5}--\ang{79.1}E.
+Accumulated variables (rain, radiation) are shifted back by the one day by which ERA5-Land stamps them
+late; SRTM is averaged into cell elevation and slope; cells outside the state are masked, leaving 529 cells
+and 16{,}436 days. The processed file was verified against the raw ERA5-Land files for five cells
 (522--\SI{5279}{m}) and six years: all variables match after unit conversion, with no day where
-$T_{\min}>T_{\max}$. Mean temperature and humidity were missing for 1981--1985 and were refilled from
-the raw files. A bias correction against MODIS from an earlier pipeline was not used: its validation
-against IMD showed a $-15$\,\textdegree C bias that is most plausibly the IMD missing-value code (99.9)
-treated as data.
+$T_{\min}>T_{\max}$. Mean temperature and humidity were missing for 1981--1985 and were refilled from the
+raw files. A bias correction against MODIS from an earlier pipeline was not used: its validation against
+IMD showed a $-15$\,\textdegree C bias that is most plausibly the IMD missing-value code (99.9) treated as
+data.
 
 % -----------------------------------------------------------------------------
 \section{Problem formulation}
 \subsection{Extreme labels}
-For cell $c$ and day $t$ let $T^{\max}_{c,t}$ be the daily maximum temperature. A threshold
-$u_{c,g}$ is the 99th percentile of $T^{\max}$ over the days of group $g$ in the base period 1981--2010,
-and day $t$ is a heat extreme if $T^{\max}_{c,t}>u_{c,g(t)}$. The main grouping is the IMD season:
-winter (Dec--Feb), pre-monsoon (Mar--May), monsoon (Jun--Sep), post-monsoon (Oct--Nov); each season is
-compared only with the same season. Whole-year and day-of-year ($\pm7$ days) labels, and cold extremes
-(1st percentile of $T^{\min}$), were also built. Using only 1981--2010 for thresholds keeps the
-validation and test years unseen. Thresholds fall by about 6--7\,\textdegree C per km of altitude
-(Table~\ref{tab:thr}), consistent with the atmospheric lapse rate.
+For cell $c$ and day $t$ let $T^{\max}_{c,t}$ be the daily maximum temperature. A threshold $u_{c,g}$ is
+the 99th percentile of $T^{\max}$ over the days of group $g$ in the base period 1981--2010, and day $t$ is
+a heat extreme if $T^{\max}_{c,t}>u_{c,g(t)}$. The main grouping is the IMD season: winter (Dec--Feb),
+pre-monsoon (Mar--May), monsoon (Jun--Sep), post-monsoon (Oct--Nov); each season is compared only with the
+same season, so a very warm winter day counts even though summer is hotter. Using only 1981--2010 for
+thresholds keeps the validation and test years unseen. Thresholds fall by about 6--7\,\textdegree C per km
+of altitude (Figure~\ref{fig:thr}), consistent with the atmospheric lapse rate. The project focuses on
+heat: in Himachal Pradesh extreme heat is the growing hazard, and cold tails were found to mix regimes.
 
-\begin{table}[H]
-\centering\small
-\caption{Mean heat threshold (99th percentile of Tmax, \textdegree C) by elevation band.}\label{tab:thr}
-\begin{tabular}{@{}lrrrrrr@{}}
-\toprule
-Elevation & Winter & Pre-monsoon & Monsoon & Post-monsoon & Whole year & Cells\\
-\midrule
-$<$1 km & 24.5 & 39.4 & 39.3 & 30.3 & 38.8 & 95\\
-1--2 km & 20.0 & 32.0 & 31.9 & 24.4 & 31.3 & 91\\
-2--3 km & 13.8 & 23.7 & 24.2 & 18.9 & 23.5 & 77\\
-3--4 km & 4.4 & 13.2 & 17.5 & 12.3 & 16.7 & 65\\
-4--5 km & $-3.4$ & 5.3 & 13.6 & 6.8 & 12.7 & 134\\
-$>$5 km & $-8.1$ & 1.0 & 11.4 & 2.9 & 10.3 & 67\\
-\bottomrule
-\end{tabular}
-\end{table}
+\begin{figure}[H]
+\centering
+\optfig{figures/fig_thresholds.png}{0.78\linewidth}
+\caption{Mean heat threshold (99th percentile of Tmax, 1981--2010) by elevation band and season.}
+\label{fig:thr}
+\end{figure}
 
 \subsection{Prediction task, features and splits}
 Each sample is one cell on day $t$; the target is whether day $t+1$ is a seasonal heat extreme. The final
-feature set (dataset v3) has 57 features:
+feature set (dataset v3) has 57 features describing the previous days and weeks:
 \begin{itemize}
   \item terrain: latitude, longitude, elevation, slope;
-  \item weather on days $t$, $t-1$, $t-2$: Tmax, Tmin, Tmean, dewpoint, humidity, pressure, solar
-        radiation, soil moisture, rain; today's Tmax and Tmin anomalies;
-  \item longer history: mean Tmax anomaly over 7, 14 and 30 days, Tmin anomaly over 7 and 30 days,
-        length of the current warm spell, days since the last extreme, extremes in the last 30 days, rain
-        over 7 and 30 days, soil moisture over 14 and 30 days and its 14-day change, 7-day dewpoint and
-        radiation, 3-day pressure change;
-  \item distance of today, yesterday and the day before to tomorrow's threshold, in \textdegree C and in
-        units of the cell's variability $s_{c,g}$, plus their trend and the day-to-day Tmax change.
+  \item weather on days $t$, $t-1$, $t-2$: Tmax, Tmin, Tmean, dewpoint, humidity, pressure, solar radiation,
+        soil moisture, rain; today's Tmax and Tmin anomalies;
+  \item longer history: mean Tmax anomaly over 7, 14 and 30 days, Tmin anomaly over 7 and 30 days, length
+        of the current warm spell, days since the last extreme, extremes in the last 30 days, rain over 7 and
+        30 days, soil moisture over 14 and 30 days and its 14-day change, 7-day dewpoint and radiation, 3-day
+        pressure change;
+  \item distance of today, yesterday and the day before to tomorrow's threshold, in \textdegree C and in units
+        of the cell's variability $s_{c,g}$, plus their trend and the day-to-day Tmax change.
 \end{itemize}
 Calendar features are excluded: in a first version the model relied on day of year (39\% of split gain),
-which does not transfer to a warmer test decade. The data are split by year, because neighbouring days
-and cells are strongly correlated (one heatwave makes hundreds of cells extreme at once). Training uses a
-random half of the 1981--2010 cell-days to fit free compute.
+which does not transfer to a warmer test decade. The data are split by year, because neighbouring days and
+cells are strongly correlated (one heatwave makes hundreds of cells extreme at once). Training uses a random
+half of the 1981--2010 cell-days to fit free compute (Table~\ref{tab:splits}).
 
 \begin{table}[H]
 \centering\small
 \caption{Splits for next-day seasonal heat extremes.}\label{tab:splits}
-\begin{tabular}{@{}llrrr@{}}
+\begin{tabular}{@{}lllrrr@{}}
 \toprule
-Split & Label years & Rows & Extremes & Share\\
+Split & Label years & Used for & Rows & Extremes & Share\\
 \midrule
-Train (random half) & 1981--2010 & 2{,}889{,}927 & 29{,}604 & 1.02\%\\
-Validation & 2011--2015 & 965{,}954 & 9{,}626 & 1.00\%\\
-Test & 2016--2025 & 1{,}932{,}437 & 37{,}450 & 1.94\%\\
+Train (random half) & 1981--2010 & fitting models and generators & 2{,}889{,}927 & 29{,}604 & 1.02\%\\
+Validation & 2011--2015 & every choice & 965{,}954 & 9{,}626 & 1.00\%\\
+Test & 2016--2025 & final scores only & 1{,}932{,}437 & 37{,}450 & 1.94\%\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -209,9 +245,9 @@ Test & 2016--2025 & 1{,}932{,}437 & 37{,}450 & 1.94\%\\
 \subsection{What the labels show}
 \begin{itemize}
   \item \textbf{Warming.} Heat extremes nearly double in the test decade (1.94\% vs 1.02\%) while cold
-        extremes fall. 2024 has the most widespread heat.
-  \item \textbf{Strongest signal in October--November.} Post-monsoon heat extremes reach 11.0\% of
-        days in 2020 and 6--7\% in 2017, 2021 and 2024, against a 1\% baseline.
+        extremes fall; 2024 has the most widespread heat.
+  \item \textbf{Strongest signal in October--November.} Post-monsoon heat extremes reach 11.0\% of days in
+        2020 and 6--7\% in 2017, 2021 and 2024, against a 1\% baseline.
   \item \textbf{Clustering.} On 6 October 1983, 522 of 529 cells were extreme together; the training
         positives come from a few hundred events.
   \item \textbf{Season-edge effect.} Seasonal extremes gather at the warm edge of a season (pre-monsoon
@@ -221,32 +257,39 @@ Test & 2016--2025 & 1{,}932{,}437 & 37{,}450 & 1.94\%\\
 % -----------------------------------------------------------------------------
 \section{Extreme value model of the minority class}\label{sec:evt}
 \subsection{Peaks over threshold}
-By the Pickands--Balkema--de Haan theorem~\cite{pickands1975,balkema1974}, for a high threshold $u$
-the excess $Y=X-u$ given $X>u$ is approximately Generalized Pareto distributed:
+By the Pickands--Balkema--de Haan theorem~\cite{pickands1975,balkema1974}, for a high threshold $u$ the
+excess $Y=X-u$ given $X>u$ is approximately Generalized Pareto distributed:
 \begin{equation}
   F_{\xi,\sigma}(y)=1-\left(1+\frac{\xi y}{\sigma}\right)^{-1/\xi},\qquad y>0,\; 1+\xi y/\sigma>0 .
 \end{equation}
 The shape $\xi$ determines the tail: $\xi<0$ gives a bounded tail with upper end point $\sigma/|\xi|$
-(expected for temperature), $\xi=0$ an exponential tail and $\xi>0$ a heavy tail. Parameters are fitted
-by maximum likelihood on 1981--2010 exceedances, with confidence intervals from a block bootstrap that
+(expected for temperature), $\xi=0$ an exponential tail and $\xi>0$ a heavy tail. Parameters are fitted by
+maximum likelihood on 1981--2010 exceedances, with confidence intervals from a block bootstrap that
 resamples whole days (exceedances are spatially clustered) and threshold-stability checks.
 
 \subsection{Standardised severity}
-Pooling raw excesses from all 529 cells mixes low cells with small day-to-day variability and high
-cells with large variability; the mixture looks heavy-tailed even when each cell's tail is bounded. We
-therefore standardise each excess by the cell's own variability $s_{c,g}$ (the standard deviation of its
-daily temperature anomaly in that season, 1981--2010):
+Pooling raw excesses from all 529 cells mixes low cells with small day-to-day variability and high cells
+with large variability; the mixture looks heavy-tailed even when each cell's tail is bounded. We therefore
+standardise each excess by the cell's own variability $s_{c,g}$ (the standard deviation of its daily
+temperature anomaly in that season, 1981--2010):
 \begin{equation}
   z_{c,t}=\frac{T^{\max}_{c,t}-u_{c,g(t)}}{s_{c,g(t)}} .
 \end{equation}
-This severity $z$ is the quantity the generative models are conditioned on and the EVT model describes.
-It is never a classifier feature, since it encodes the next day's outcome.
+This severity $z$ is what the EVT model describes and what the generators are guided by. It is never a
+classifier feature, since it encodes the next day's outcome.
+
+\begin{figure}[H]
+\centering
+\optfig{figures/fig_gpd_shape.png}{0.8\linewidth}
+\caption{GPD shape $\xi$ for raw and standardised heat excesses (1981--2010), with 95\% block-bootstrap
+intervals for the standardised fit.}
+\label{fig:gpdshape}
+\end{figure}
 
 \begin{table}[H]
 \centering\small
-\caption{GPD shape $\xi$ fitted to raw and standardised heat excesses (1981--2010), with 95\%
-block-bootstrap interval, and the share of 2016--2025 extremes beyond the fitted 90th percentile
-(0.10 means an unchanged tail).}\label{tab:gpd}
+\caption{GPD shape $\xi$ and the share of 2016--2025 extremes beyond the fitted 90th percentile (0.10 means
+an unchanged tail).}\label{tab:gpd}
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
 Group & $\xi$ raw & $\xi$ standardised & 95\% interval & Recent beyond q90\\
@@ -260,17 +303,25 @@ Heat, post-monsoon & $0.262$ & $0.070$ & $[-0.177,0.231]$ & 0.063\\
 \end{tabular}
 \end{table}
 
-After standardisation every heat tail is bounded or close to it (Table~\ref{tab:gpd},
-Figure~\ref{fig:qq}); the spurious heavy tail of post-monsoon heat ($\xi=0.26$) largely disappears.
-Recent winter warm extremes exceed the old tail's 90th percentile twice as often as expected, i.e.\
-winter warm spells have become more intense, not only more frequent. Cold tails are only partly fixed by
-standardisation and appear to mix regimes; this report therefore focuses on heat.
+After standardisation every heat tail is bounded or close to it (Figure~\ref{fig:gpdshape},
+Table~\ref{tab:gpd}, Figure~\ref{fig:qq}); the spurious heavy tail of post-monsoon heat ($\xi=0.26$)
+largely disappears. Recent winter warm extremes exceed the old tail's 90th percentile twice as often as
+expected: winter warm spells have become more intense, not only more frequent.
 
 \begin{figure}[H]
 \centering
 \optfig{figures/evt_qq_std.png}{\linewidth}
 \caption{GPD Q-Q plots of raw (grey) and standardised (blue) excesses, 1981--2010.}\label{fig:qq}
 \end{figure}
+
+\subsection{EVT tail focus}\label{sec:tailfocus}
+The fitted GPD gives every extreme a \emph{tail position} $q=F_{\xi,\sigma}(z)\in[0,1)$: $q=0.9$ means only
+10\% of extremes in that season are more severe. Real extremes are spread evenly over $q$. \emph{EVT tail
+focus} asks for synthetic extremes with half of their tail positions drawn from the whole GPD and half from
+its upper 20\% ($q\in[0.8,1)$), so that about 60\% of the synthetic extremes lie in the region that holds
+only 20\% of the real ones. Severities are capped at the bounded tail's end point and at 1.5 times the
+largest observed severity of the season, so EVT can extrapolate moderately but not without limit. This is
+the main way EVT enters the project.
 
 % -----------------------------------------------------------------------------
 \section{Evaluation protocol}\label{sec:protocol}
@@ -279,107 +330,75 @@ synthetic data, blend weight, final model) is made on the validation years 2011-
 2016--2025 is used only for scoring. Scores:
 \begin{itemize}
   \item \textbf{PR-AUC} (average precision) on all test days; a random classifier scores 0.019.
-  \item \textbf{Onset PR-AUC}: only days where today is not yet above tomorrow's threshold, so that
-        persistence cannot simply carry an ongoing event forward.
-  \item \textbf{Severe PR-AUC}: normal days against the 10\% most severe test extremes
-        ($z\ge0.77$, 3{,}745 cell-days); this is the extreme region the EVT guidance targets.
+  \item \textbf{Onset PR-AUC}: only days where today is not yet above tomorrow's threshold, i.e.\ heatwave
+        starts, which persistence cannot anticipate.
+  \item \textbf{Severe PR-AUC}: normal days against the 10\% most severe test extremes ($z\ge0.77$,
+        3{,}745 cell-days); this is the region the EVT guidance targets.
   \item Precision, recall and the critical success index
         $\mathrm{CSI}=\mathrm{TP}/(\mathrm{TP}+\mathrm{FP}+\mathrm{FN})$ at the F1-optimal validation threshold.
 \end{itemize}
 \textbf{Uncertainty.} Because extremes come in spatially and temporally clustered events, 95\% intervals
 resample whole test months (200 resamples). Two models are compared on the same resamples; the share of
 resamples in which one is better is reported, with $\ge0.95$ read as a convincing win and $\le0.05$ as a
-convincing loss. From Step~9 on we also repeat training with several seeds, since the bootstrap does not
-capture training randomness.
+convincing loss. From Step~9 on, every setting is also trained with five seeds, which change LightGBM's
+randomness and which synthetic rows are drawn, because the bootstrap does not capture training randomness.
+\emph{Seed-averaged} models average the predicted probabilities of the five seeds.
 
 \textbf{Baseline to beat.} \emph{Persistence} uses no model: its score is today's distance to tomorrow's
 threshold, $T^{\max}_{c,t}-u_{c,g(t+1)}$. Because heat extremes persist, this simple rule is strong.
 
-% -----------------------------------------------------------------------------
-\section{Classic baselines and GAN-based generators}
-\subsection{Classic rebalancing}
-With the distance-to-threshold features, LightGBM~\cite{ke2017lightgbm} (learning rate 0.05, up to
-1{,}000 trees with early stopping, and a monotone constraint that a larger distance can only raise the
-risk) gains 0.08--0.11 PR-AUC over a first version and the standardised distance carries 78\% of the
-split gain. Class weights and SMOTE give no reliable improvement (Table~\ref{tab:step8}), in line
-with~\cite{elor2022smote}.
-
-\subsection{CTGAN with EVT resampling (Step 4)}
-A CTGAN~\cite{xu2019ctgan} was trained on the real extremes (features plus season and $z$). Three
-synthetic sets came from the same generator: as generated; with physically impossible rows removed; and,
-the EVT-guided variant, resampled per season so that $z$ follows the fitted GPD (20 bins of equal GPD
-probability, each sample weighted by target share over generated share, nothing beyond the tail bound).
-Only 15.9\% of the raw CTGAN rows were physically possible (for example $T^{\min}>T^{\max}$). EVT
-resampling made the synthetic severities follow the GPD (Kolmogorov--Smirnov distance from 0.16--0.24
-down to about 0.02), but the GAN never generated the far tail, so EVT could only re-weight what was
-there. All variants were within 0.015 PR-AUC of each other and of real data alone.
-
-\subsection{Severity-conditioned CTGAN (Step 5)}
-Conditioning CTGAN on season $\times$ GPD severity bin, with physics enforced by snapping rows to real
-cells, also failed: 70\% of generated rows had a severity outside the requested bin, because CTGAN
-guarantees only its discrete conditioning column. With month-block intervals of about $\pm0.07$, no
-method was statistically better than real data alone or than persistence. This motivated a generator in
-which the severity is a direct, continuous input.
+\textbf{Classifier.} LightGBM~\cite{ke2017lightgbm} with learning rate 0.05, 31 leaves, up to 1{,}000 trees
+with early stopping on validation PR-AUC, and a monotone constraint that a larger distance to tomorrow's
+threshold can only raise the risk. With the distance features, the standardised distance carries 78\% of
+the split gain.
 
 % -----------------------------------------------------------------------------
-\section{EVT-guided conditional tabular diffusion}\label{sec:diff}
-\subsection{Model}
+\section{First generators (Steps 3--7)}
+\subsection{Classic rebalancing and CTGAN}
+Class weights and SMOTE gave no reliable improvement over real data alone (Table~\ref{tab:step8}), in line
+with~\cite{elor2022smote}. A CTGAN~\cite{xu2019ctgan} trained on the real extremes produced rows of which
+only 15.9\% were physically possible (for example $T^{\min}>T^{\max}$). Resampling its output so that
+severities follow the GPD made the severity distribution match (Kolmogorov--Smirnov distance from
+0.16--0.24 to about 0.02), but the GAN rarely generated the far tail, so EVT could only re-weight what was
+there. Conditioning CTGAN on season $\times$ GPD severity bin also failed: 70\% of generated rows had a
+severity outside the requested bin. This motivated a generator in which the severity is a direct,
+continuous input.
+
+\subsection{EVT-guided conditional tabular diffusion}\label{sec:diff}
 The generator is a denoising diffusion model~\cite{ho2020ddpm} trained on the 29{,}604 real training
-extremes. It models the 49 base features (terrain, lagged weather, long-history features) after a
-quantile transform to a standard normal per feature. The forward process adds Gaussian noise,
-$q(x_\tau\mid x_0)=\mathcal{N}(\sqrt{\bar\alpha_\tau}\,x_0,(1-\bar\alpha_\tau)I)$, with a cosine schedule
-over $T=1000$ steps~\cite{nichol2021improved}. The denoiser $\epsilon_\theta(x_\tau,\tau,c)$ is a residual
-MLP (width 512, four blocks) with sinusoidal step embedding and the condition
-\begin{equation}
-  c=\big[\,\text{one-hot season},\; z/0.5,\; 1\,\big],
-\end{equation}
-which is set to zero for 10\% of training rows so that the same network also learns the unconditional
-model. It is trained with the standard noise-prediction loss
-$\lVert\epsilon-\epsilon_\theta(x_\tau,\tau,c)\rVert^2$ (15{,}000 steps, batch 1{,}024, AdamW, EMA of
-the weights, about 30 minutes on a free T4 GPU). Samples are drawn with 50 DDIM steps~\cite{song2021ddim}
-and classifier-free guidance~\cite{ho2022cfg} of weight $w=2$:
+extremes. It models the 49 base features after a quantile transform to a standard normal per feature. The
+forward process adds Gaussian noise, $q(x_\tau\mid x_0)=\mathcal{N}(\sqrt{\bar\alpha_\tau}\,x_0,
+(1-\bar\alpha_\tau)I)$, with a cosine schedule over $T=1000$ steps~\cite{nichol2021improved}. The denoiser
+$\epsilon_\theta(x_\tau,\tau,c)$ is a residual MLP (width 512, four blocks) with the condition
+$c=[\text{one-hot season},\, z/0.5,\, 1]$, set to zero for 10\% of training rows. It is trained with the
+noise-prediction loss $\lVert\epsilon-\epsilon_\theta(x_\tau,\tau,c)\rVert^2$ (15{,}000 steps, batch 1{,}024,
+AdamW, EMA, about 30 minutes on a free T4 GPU) and sampled with 50 DDIM steps~\cite{song2021ddim} and
+classifier-free guidance~\cite{ho2022cfg} of weight $w=2$:
 $\hat\epsilon=(1+w)\,\epsilon_\theta(x,\tau,c)-w\,\epsilon_\theta(x,\tau,\varnothing)$.
 
-\subsection{Physics by construction}
-Each generated row is snapped to the nearest real grid cell (which fixes its terrain, threshold and
-variability), the three temperatures of each day are sorted so that $T^{\min}\le T^{\text{mean}}\le
-T^{\max}$, other variables are clipped to their physical ranges, and the eight distance-to-threshold
-features are computed exactly from the generated temperatures. Only 0.0--0.2\% of diffusion rows needed
-their temperatures reordered, against 13--31\% of CTGAN rows.
+\textbf{Physics by construction.} Each generated row is snapped to the nearest real grid cell (which fixes
+its terrain, threshold and variability), the three temperatures of each day are sorted so that
+$T^{\min}\le T^{\text{mean}}\le T^{\max}$, other variables are clipped to their physical ranges, and the
+eight distance-to-threshold features are recomputed exactly. The same clean-up is applied to every
+generator in Part II.
 
-\subsection{Where EVT enters: which severities are requested}
-Because $z$ is an input, the training set's severity distribution can be chosen freely. Three synthetic
-sets come from the same trained network, so any difference is due to the EVT guidance alone:
-\begin{itemize}
-  \item \texttt{ddpm\_emp} (no EVT): season and $z$ copied from randomly chosen real extremes;
-  \item \texttt{ddpm\_evt}: season by its real share, $z$ drawn from the fitted seasonal GPD;
-  \item \texttt{ddpm\_evt\_tail} (EVT with tail emphasis): half of the requests from the GPD, half from
-        its upper 20\% (GPD probability in $[0.8,1)$). About 60\% of these synthetic extremes therefore lie
-        in the region that holds 20\% of real extremes.
-\end{itemize}
-GPD draws are capped at the bounded tail's end point and at 1.5 times the largest observed severity of
-the season, so EVT can extrapolate moderately beyond the record (0.2--0.6\% of rows in winter and
-post-monsoon lie beyond the observed maximum). Each set holds 256{,}428 rows (8.7 per real extreme), of
-which a random subset is used at lower ratios.
+\textbf{Where EVT enters.} Because $z$ is an input, the severities can be chosen freely. Three synthetic sets
+come from the same network, so any difference is due to EVT alone: \texttt{ddpm\_emp} (severities copied from
+real extremes, no EVT), \texttt{ddpm\_evt} (drawn from the fitted GPD) and \texttt{ddpm\_evt\_tail} (EVT tail
+focus, Section~\ref{sec:tailfocus}).
 
-\subsection{Does the model obey the requested severity?}
-A separate LightGBM ``judge'' trained on real extremes predicts $z$ from the features of held-out real
-extremes and of generated rows; the Spearman correlation between requested and judged severity measures
-control. On held-out real extremes it is 0.776; for the diffusion sets 0.632 (\texttt{emp}), 0.616
-(\texttt{evt}) and 0.666 (\texttt{evt\_tail}); for CTGAN 0.043. The diffusion model therefore produces
-rows whose weather actually corresponds to the requested severity, which CTGAN does not. The severities
-requested by \texttt{ddpm\_evt} follow the fitted GPD to a Kolmogorov--Smirnov distance of about 0.003.
+\textbf{Does the model obey the requested severity?} A separate LightGBM ``judge'' trained on real extremes
+predicts $z$ from a row's features. The Spearman correlation between requested and judged severity is 0.776
+on held-out real extremes, 0.62--0.67 for the diffusion sets and 0.04 for CTGAN: the diffusion model
+produces weather that matches the requested severity.
 
 % -----------------------------------------------------------------------------
-\section{Results}\label{sec:results}
+\section{Results of Part I (Steps 8--10)}\label{sec:results}
 \subsection{All methods, one seed (Step 8)}
-Table~\ref{tab:step8} compares two classifiers (LightGBM, and a $3\times256$ MLP averaged over two
-seeds) trained on real data alone, with class weights, or with the full synthetic sets added.
-
 \begin{table}[H]
 \centering\small
-\caption{Test results (2016--2025), one training seed, full synthetic sets (8.7 synthetic per real
-extreme). Best value per classifier in bold.}\label{tab:step8}
+\caption{Test results (2016--2025), one training seed, 8.7 synthetic rows per real extreme. Best value per
+classifier in bold.}\label{tab:step8}
 \begin{tabular}{@{}llrrrrrr@{}}
 \toprule
 Classifier & Training data & PR-AUC & Onset & Severe & Precision & Recall & CSI\\
@@ -406,19 +425,14 @@ MLP & real only & \win{0.597} & \win{0.240} & 0.576 & 0.575 & 0.571 & 0.402\\
 \end{table}
 
 Three observations shaped the next steps. (i) Plain LightGBM is much weaker than persistence on the most
-severe extremes (0.461 vs 0.565): with few deep-tail examples, the trees do not extrapolate. EVT diffusion
-closed this gap (0.580; a paired gain of +0.11 over no-EVT diffusion in 100\% of month resamples).
-(ii) With 8.7 synthetic rows per real extreme, onset skill fell (0.227 to 0.182). (iii) Every synthetic set
-hurt the MLP, which, unlike the monotone-constrained trees, can learn to separate synthetic from real rows
-when they dominate the minority class. CTGAN was the worst method for both classifiers. The rest of the
-study therefore uses LightGBM.
+severe extremes (0.461 vs 0.565): with few deep-tail examples, the trees do not extrapolate. (ii) With 8.7
+synthetic rows per real extreme, onset skill fell. (iii) Every synthetic set hurt the MLP, which, unlike the
+monotone-constrained trees, can learn to separate synthetic from real rows when they dominate the minority
+class. The rest of the study therefore uses LightGBM.
 
 \subsection{How much synthetic data (Step 9)}
-Figure~\ref{fig:ratio} varies the number of synthetic extremes per real one. Small amounts (0.25, 0.5)
-change little. At one synthetic per real extreme, only the tail-emphasised EVT set lifts severe PR-AUC
-(0.560, against 0.441 and 0.449 for the no-EVT and plain-EVT sets) while keeping onset skill; at the full
-amount every set loses onset skill. On validation, the tail-emphasised set at ratio 1 was the best
-single model.
+Small amounts (0.25, 0.5 synthetic per real extreme) change little; at the full 8.7 every set loses onset
+skill. One synthetic per real extreme was best on validation (Figure~\ref{fig:ratio}) and is used from here on.
 
 \begin{figure}[H]
 \centering
@@ -427,16 +441,15 @@ single model.
 Dashed: real data only; dotted: persistence.}\label{fig:ratio}
 \end{figure}
 
-\subsection{Is it robust? Five training seeds (Steps 9--10)}
-Repeating the Step~8 comparison with other seeds revealed that its headline was partly luck: the severe
-PR-AUC gain of plain EVT over no-EVT diffusion was $+0.125$, $-0.057$ and $-0.007$ for seeds 42, 1 and 2.
-On the severe set, LightGBM's run-to-run spread (plain model: 0.37 to 0.46) is as large as the effects
-being measured. Every setting was therefore trained with five seeds; the seed changes both LightGBM's
-randomness and which synthetic rows are drawn (Table~\ref{tab:seeds}, Figure~\ref{fig:seeds}).
+\subsection{Five training seeds (Steps 9--10)}
+A one-seed comparison proved unreliable: the severe PR-AUC gain of plain EVT over no-EVT diffusion was
+$+0.125$, $-0.057$ and $-0.007$ for three seeds. Every setting was therefore trained with five seeds
+(Table~\ref{tab:seeds}, Figure~\ref{fig:seeds}).
 
 \begin{table}[H]
 \centering\small
-\caption{LightGBM, five training seeds: test mean $\pm$ standard deviation.}\label{tab:seeds}
+\caption{LightGBM with diffusion data, five training seeds: test mean $\pm$ standard deviation, and same-seed
+comparisons (seeds in which the first is better).}\label{tab:seeds}
 \begin{tabular}{@{}lrrr@{}}
 \toprule
 Training data (synthetic per real extreme) & PR-AUC & Onset PR-AUC & Severe PR-AUC\\
@@ -445,29 +458,12 @@ Real only & $0.586\pm0.007$ & $0.226\pm0.005$ & $0.411\pm0.042$\\
 Diffusion, no EVT (1) & $0.592\pm0.005$ & $0.218\pm0.001$ & $0.482\pm0.036$\\
 Diffusion, EVT (1) & $0.589\pm0.003$ & $0.219\pm0.002$ & $0.462\pm0.023$\\
 \textbf{Diffusion, EVT tail (1)} & $\mathbf{0.601\pm0.004}$ & $0.222\pm0.006$ & $\mathbf{0.549\pm0.020}$\\
-Diffusion, no EVT (8.7) & $0.588\pm0.007$ & $0.195\pm0.003$ & $0.504\pm0.030$\\
-Diffusion, EVT (8.7) & $0.585\pm0.005$ & $0.191\pm0.005$ & $0.504\pm0.050$\\
 Diffusion, EVT tail (8.7) & $0.587\pm0.002$ & $0.197\pm0.006$ & $0.534\pm0.026$\\
-\midrule
 Persistence (no model) & 0.586 & 0.191 & 0.565\\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[H]
-\centering\small
-\caption{Same-seed differences (first minus second), mean over five seeds, and the number of seeds in
-which the first model is better.}\label{tab:seedcmp}
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-Comparison & PR-AUC & Onset PR-AUC & Severe PR-AUC\\
 \midrule
 EVT tail (1) vs no EVT (1) & $+0.009$ (4/5) & $+0.004$ (4/5) & $\mathbf{+0.066}$ \textbf{(5/5)}\\
 EVT (1) vs no EVT (1) & $-0.003$ (2/5) & $+0.001$ (4/5) & $-0.020$ (1/5)\\
-EVT tail (8.7) vs no EVT (8.7) & $-0.001$ (3/5) & $+0.003$ (4/5) & $+0.030$ (3/5)\\
-EVT (8.7) vs no EVT (8.7) & $-0.003$ (2/5) & $-0.004$ (1/5) & $-0.000$ (1/5)\\
 EVT tail (1) vs real only & $+0.015$ (5/5) & $-0.004$ (1/5) & $\mathbf{+0.138}$ \textbf{(5/5)}\\
-EVT (8.7) vs real only & $-0.002$ (2/5) & $-0.035$ (0/5) & $+0.092$ (5/5)\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -475,123 +471,371 @@ EVT (8.7) vs real only & $-0.002$ (2/5) & $-0.035$ (0/5) & $+0.092$ (5/5)\\
 \begin{figure}[H]
 \centering
 \optfig{figures/seed_spread.png}{\linewidth}
-\caption{Test scores of five LightGBM seeds per setting (dots) and their mean (bar). Dotted line:
-persistence.}\label{fig:seeds}
+\caption{Test scores of five LightGBM seeds per setting (dots) and their mean (bar), diffusion data.
+Dotted line: persistence.}\label{fig:seeds}
 \end{figure}
 
-The robust finding is specific: \emph{tail-emphasised} EVT sampling at one synthetic per real extreme
-improves severe-extreme skill over the same diffusion model without EVT in every seed (+0.066), and over
-real data alone in every seed (+0.138), while slightly improving overall PR-AUC and keeping onset skill.
-It also halves the seed-to-seed spread on severe days ($\pm0.020$ against $\pm0.042$). Plain GPD sampling
-does not beat empirical sampling.
+The robust finding of Part I is specific: \emph{tail-focused} EVT sampling at one synthetic per real
+extreme improves severe-extreme skill over the same diffusion model without EVT in every seed (+0.066) and
+over real data alone in every seed (+0.138), while keeping onset skill and halving the seed-to-seed spread.
+Drawing severities from the GPD as fitted does not help, because a good fit reproduces almost the same
+severities as the data. The seed-averaged EVT-tail model reached PR-AUC 0.609 against 0.586 for persistence
+(better in 97\% of month resamples) and onset PR-AUC 0.228 against 0.191 (100\%), and matched persistence on
+severe days (0.579 vs 0.565).
 
-\subsection{Final models: seed-averaged ensembles}
-Averaging the five seeds of each setting removes much of the training noise. We also blend (logit
-average) the averaged real-only model with each averaged augmented model, with the weight chosen on
-validation. Table~\ref{tab:final} reports the main candidates with month-block tests.
+% =============================================================================
+\part*{Part II: Which generator helps most? (fixed classifier)}
+\addcontentsline{toc}{part}{Part II: Which generator helps most? (fixed classifier)}
+
+\section{Design of the comparison (Steps 11--12)}
+\subsection{What is fixed and what varies}
+Everything about the classifier is fixed: LightGBM with the settings of Section~\ref{sec:protocol}, the 57
+features, the 1981--2010 training data, validation 2011--2015 and test 2016--2025. Only the extra extreme
+days change. Every method adds exactly one synthetic extreme per real extreme (29{,}604 rows), drawn again
+for each of the five seeds.
 
 \begin{table}[H]
 \centering\small
-\caption{Seed-averaged (five-model) LightGBM ensembles on the test decade, with 95\% month-block
-intervals. ``vs P.'': share of resamples in which the model beats persistence ($\ge0.95$ convincing
-win, $\le0.05$ convincing loss).}\label{tab:final}
-\begin{tabular}{@{}lrrrrrr@{}}
+\caption{Generation methods compared. ``Conditional'': the generator takes the severity as an input.}
+\label{tab:methods}
+\begin{tabular}{@{}llllp{5.0cm}@{}}
 \toprule
-Model & PR-AUC & vs P. & Onset & vs P. & Severe & vs P.\\
+Method & Family & Conditional & EVT version & Notes\\
 \midrule
-Persistence & 0.586 {\scriptsize[0.48, 0.64]} & -- & 0.191 & -- & 0.565 {\scriptsize[0.33, 0.70]} & --\\
-Real only & 0.599 & 0.77 & \textbf{0.235} & 1.00 & 0.441 & \textbf{0.05}\\
-Diffusion, no EVT (1) & 0.602 & 0.88 & 0.224 & 0.98 & 0.531 & 0.20\\
-Diffusion, EVT (1) & 0.599 & 0.82 & 0.224 & 0.99 & 0.513 & 0.14\\
-\textbf{Diffusion, EVT tail (1)} & \textbf{0.609} {\scriptsize[0.51, 0.66]} & \textbf{0.97} & 0.228 & \textbf{1.00} & \textbf{0.579} {\scriptsize[0.32, 0.72]} & 0.67\\
-Blend: real only + EVT tail (8.7)$^\ast$ & 0.600 & 0.85 & 0.215 & 0.91 & 0.560 & 0.50\\
+SMOTE~\cite{chawla2002smote} & interpolation & -- & -- & between real extremes and neighbours\\
+Borderline-SMOTE~\cite{han2005borderline} & interpolation & -- & -- & only near the class boundary\\
+ADASYN~\cite{he2008adasyn} & interpolation & -- & -- & more where extremes are hard\\
+Gaussian copula~\cite{patki2016sdv} & statistical & no & selection & per-column margins + correlation\\
+TVAE~\cite{xu2019ctgan} & VAE & no & selection & tabular variational autoencoder\\
+CTGAN~\cite{xu2019ctgan} & GAN & no & selection & conditional tabular GAN\\
+CopulaGAN~\cite{patki2016sdv} & GAN & no & selection & CTGAN on copula-transformed columns\\
+Cond.\ WGAN-GP~\cite{gulrajani2017wgangp} & GAN & yes & requested & our design, same inputs as diffusion\\
+Diffusion (Section~\ref{sec:diff}) & diffusion & yes & requested & Part I generator\\
 \bottomrule
-\multicolumn{7}{@{}l}{\footnotesize $^\ast$ Highest validation score (0.5950); the EVT-tail (1) ensemble and its blend scored
-0.5940 and 0.5948.}
 \end{tabular}
 \end{table}
 
-Paired against the same ensemble without EVT, the EVT-tail ensemble at ratio 1 is better on overall
-PR-AUC in 96\% of resamples (+0.007), on onset in 93\% (+0.004) and on severe days in 91\% (+0.042);
-against the real-only ensemble its severe gain is +0.117 (100\%). It is the only model in the study that
-beats persistence convincingly on overall and onset skill while matching it on the most severe extremes;
-the real-only ensemble beats persistence on onset but loses clearly on severe days.
+\subsection{Applying EVT tail focus to any generator}
+Each generator is used twice: \emph{plain} (as it is) and with \emph{EVT tail focus}
+(Section~\ref{sec:tailfocus}). For the conditional generators (WGAN-GP, diffusion) the severities are requested
+directly from the GPD. Unconditional generators cannot be told a severity, so a generator-independent route is
+used:
+\begin{enumerate}
+  \item generate a pool ten times larger than needed (296{,}040 rows) and apply the physics clean-up;
+  \item score every row with the severity judge (Spearman 0.769 on unseen real extremes) and convert the
+        judged severity into a tail position $q$ by its rank among real extremes of the same season;
+  \item select rows so that $q$ follows the tail-focus target (20 bins; 60\% of rows with $q\ge0.8$) and
+        seasons keep their real shares.
+\end{enumerate}
+If a generator makes too few severe rows, its severe rows must be repeated; the share of repeated rows is
+reported, so this route also measures whether a generator can reach the far tail at all.
 
-Our pre-specified rule (highest validation score) selects the blend of the real-only ensemble with the
-EVT-tail ensemble at the full ratio (blend weight 0.9 on the EVT-tail model). Its validation score differs
-from the ratio-1 EVT-tail models by less than 0.001, i.e.\ the three top models on validation are all
-EVT-tail models and are statistically tied; the rule's choice scores slightly lower on test. We report both
-rather than replacing the rule with a test-informed choice.
+\subsection{Generator settings}
+All generators are trained on the same 29{,}604 real extremes with the same 49 base features plus season.
+TVAE, CTGAN and CopulaGAN use the library defaults of 300 epochs and batch 500 (SDV 2.2~\cite{patki2016sdv}).
+The conditional WGAN-GP uses three-layer MLPs of width 512 for generator and critic, gradient penalty 10,
+five critic updates per generator update and 6{,}000 generator updates. The interpolation methods work
+directly on the 57 classifier features; Borderline-SMOTE and ADASYN use a random 300{,}000 normal days as
+neighbours.
+
+% -----------------------------------------------------------------------------
+\section{Results of Part II}
+\subsection{The generators before any classifier (Step 11)}
+\begin{table}[H]
+\centering\small
+\caption{Generator properties. ``Breaking physics'': raw rows violating physical rules before clean-up (real
+data: 0\%). ``Top 20\% / top 5\%'': share of the generator's own output judged in the top 20\% / 5\% of the
+tail (real data: 20\% / 5\%). ``Repeated'': share of tail rows that had to be repeated in the EVT set.
+``Control'': Spearman between requested and judged severity (real data 0.78).}\label{tab:genstats}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Generator & Breaking physics & Top 20\% & Top 5\% & Repeated & Control & Train (min)\\
+\midrule
+Gaussian copula & 12.3\% & 40.6\% & 18.1\% & 3.0\% & -- & 1.8\\
+TVAE & 74.7\% & 38.3\% & 16.7\% & 4.8\% & -- & 18.5\\
+CTGAN & 68.7\% & 42.0\% & 17.7\% & 3.9\% & -- & 23.5\\
+CopulaGAN & 71.5\% & 28.0\% & 12.3\% & 19.9\% & -- & 25.4\\
+Cond.\ WGAN-GP & 9.0\% & 37.7\% & 17.1\% & 0.0\% & 0.25 & 3.4\\
+Diffusion (Step 7) & $\approx$0\%$^\ast$ & 28.7\% & -- & -- & 0.64--0.67 & $\approx$30\\
+\bottomrule
+\multicolumn{7}{@{}l}{\footnotesize $^\ast$ only temperature order was recorded for diffusion: 0.0--0.2\% of rows needed reordering.}
+\end{tabular}
+\end{table}
 
 \begin{figure}[H]
 \centering
-\optfig{figures/pr_curves.png}{\linewidth}
-\caption{Precision--recall curves on the test decade for all methods, one seed (Step 8).}\label{fig:pr}
+\optfig{figures/fig_generator_quality.png}{\linewidth}
+\caption{Step 11: physics violations before clean-up, reach of the far tail, and training time.}
+\label{fig:genq}
 \end{figure}
 
-% -----------------------------------------------------------------------------
+Three properties stand out (Table~\ref{tab:genstats}, Figure~\ref{fig:genq}). The deep unconditional
+generators break physical rules in about 70\% of their raw rows: they reproduce the columns, not the physics.
+The conditional WGAN-GP largely ignores the requested severity (control 0.25, against 0.67 for diffusion), so
+its EVT set reached only 41\% of rows in the top 20\% instead of the 60\% target. All generators produce rows
+that the judge rates as more severe than real extremes (about 40\% in the top 20\% instead of 20\%).
+
+\subsection{Classifier results (Step 12)}
+\begin{figure}[H]
+\centering
+\optfig{figures/fig_step12_by_seed.png}{\linewidth}
+\caption{Step 12: LightGBM test scores per training seed (dots) and their mean (bar) for every method. Grey:
+no generator or interpolation; blue: generator as it is; orange: generator with EVT tail focus. Dashed:
+mean of real data only; dotted: persistence (in the middle panel the two lines nearly coincide).}
+\label{fig:step12}
+\end{figure}
+
+\begin{table}[H]
+\centering\small
+\caption{Step 12, five training seeds: test mean $\pm$ standard deviation, and the number of seeds in which
+the method beats real data only. Best mean in bold.}\label{tab:step12}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Method & \multicolumn{2}{c}{PR-AUC} & \multicolumn{2}{c}{Onset PR-AUC} & \multicolumn{2}{c}{Severe PR-AUC}\\
+\midrule
+Real data only & $0.586\pm0.007$ & -- & $0.226\pm0.005$ & -- & $0.411\pm0.042$ & --\\
+SMOTE & $0.596\pm0.011$ & 5/5 & $\mathbf{0.226\pm0.003}$ & 4/5 & $0.477\pm0.054$ & 5/5\\
+Borderline-SMOTE & $0.580\pm0.004$ & 0/5 & $0.222\pm0.002$ & 0/5 & $0.437\pm0.017$ & 3/5\\
+ADASYN & $0.586\pm0.006$ & 1/5 & $0.223\pm0.004$ & 2/5 & $0.429\pm0.031$ & 4/5\\
+\midrule
+Gaussian copula & $0.596\pm0.006$ & 5/5 & $0.210\pm0.004$ & 0/5 & $0.507\pm0.039$ & 5/5\\
+\quad + EVT tail & $\mathbf{0.603\pm0.007}$ & 5/5 & $0.221\pm0.003$ & 1/5 & $0.546\pm0.034$ & 5/5\\
+TVAE & $0.588\pm0.003$ & 3/5 & $0.200\pm0.003$ & 0/5 & $0.514\pm0.018$ & 5/5\\
+\quad + EVT tail & $0.603\pm0.003$ & 5/5 & $0.215\pm0.005$ & 0/5 & $\mathbf{0.583\pm0.011}$ & 5/5\\
+CTGAN & $0.599\pm0.004$ & 5/5 & $0.204\pm0.002$ & 0/5 & $0.554\pm0.039$ & 5/5\\
+\quad + EVT tail & $0.602\pm0.004$ & 5/5 & $0.213\pm0.002$ & 0/5 & $0.581\pm0.009$ & 5/5\\
+CopulaGAN & $0.594\pm0.001$ & 4/5 & $0.199\pm0.004$ & 0/5 & $0.522\pm0.008$ & 5/5\\
+\quad + EVT tail & $0.601\pm0.006$ & 5/5 & $0.210\pm0.002$ & 0/5 & $0.578\pm0.016$ & 5/5\\
+Cond.\ WGAN-GP & $0.597\pm0.009$ & 4/5 & $0.217\pm0.004$ & 0/5 & $0.509\pm0.052$ & 4/5\\
+\quad + EVT tail & $0.601\pm0.002$ & 5/5 & $0.221\pm0.003$ & 0/5 & $0.532\pm0.024$ & 5/5\\
+Diffusion & $0.592\pm0.005$ & 3/5 & $0.218\pm0.001$ & 0/5 & $0.482\pm0.036$ & 4/5\\
+\quad + EVT tail & $0.601\pm0.004$ & 5/5 & $0.222\pm0.006$ & 1/5 & $0.549\pm0.020$ & 5/5\\
+\midrule
+Persistence (no model) & 0.586 & & 0.191 & & 0.565 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{What EVT tail focus adds}
+\begin{figure}[H]
+\centering
+\optfig{figures/fig_evt_gain.png}{\linewidth}
+\caption{Gain of EVT tail focus over the same generator without it: mean of the five same-seed differences,
+and the number of seeds in which the EVT version is better.}
+\label{fig:evtgain}
+\end{figure}
+
+Averaged over the five same-seed comparisons, EVT tail focus improved every generator on all three scores
+(Figure~\ref{fig:evtgain}). The most consistent gain
+is on heatwave onsets (better in 4--5 of 5 seeds for all six generators), followed by overall PR-AUC (3--5 of
+5) and severe PR-AUC (3--5 of 5, up to $+0.070$ for TVAE). For the seed-averaged models, EVT tail focus is a
+convincing win on onset for the Gaussian copula, TVAE, CTGAN and CopulaGAN (100\% of month resamples), and on
+severe days for TVAE (96\%) and the conditional WGAN-GP (99\%). All six top-ranked methods on validation are
+EVT-tail versions (Table~\ref{tab:rank}).
+
+\subsection{Seed-averaged models and ranking}
+\begin{table}[H]
+\centering\small
+\caption{Seed-averaged (five-model) LightGBM ensembles, ordered by validation score (mean of validation
+PR-AUC, onset and severe PR-AUC). Test scores; ``vs P.'': share of month resamples in which the model beats
+persistence on PR-AUC / onset / severe ($\ge0.95$ convincing).}\label{tab:rank}
+\begin{tabular}{@{}lrrrrl@{}}
+\toprule
+Method & Validation & PR-AUC & Onset & Severe & vs P.\\
+\midrule
+\rowcolor{orange!8} CTGAN + EVT tail & 0.600 & 0.611 & 0.223 & \textbf{0.601} & 0.99 / 0.98 / 0.92\\
+\rowcolor{orange!8} TVAE + EVT tail & 0.600 & 0.610 & 0.220 & \textbf{0.601} & 0.97 / 0.97 / 0.90\\
+\rowcolor{orange!8} Gaussian copula + EVT tail & 0.599 & 0.608 & 0.225 & 0.558 & 0.98 / 1.00 / 0.53\\
+\rowcolor{orange!8} CopulaGAN + EVT tail & 0.595 & 0.607 & 0.214 & 0.591 & 0.96 / 0.94 / 0.79\\
+\rowcolor{orange!8} Diffusion + EVT tail & 0.594 & 0.609 & \textbf{0.228} & 0.579 & 0.97 / 1.00 / 0.73\\
+\rowcolor{orange!8} Cond.\ WGAN-GP + EVT tail & 0.581 & \textbf{0.611} & 0.226 & 0.579 & 0.99 / 0.99 / 0.70\\
+CTGAN & 0.579 & 0.609 & 0.208 & 0.595 & 0.97 / 0.83 / 0.80\\
+Gaussian copula & 0.570 & 0.606 & 0.215 & 0.555 & 0.98 / 0.96 / 0.49\\
+TVAE & 0.559 & 0.593 & 0.203 & 0.527 & 0.75 / 0.77 / 0.35\\
+ADASYN & 0.556 & 0.594 & 0.229 & 0.450 & 0.71 / 0.99 / 0.17\\
+Borderline-SMOTE & 0.554 & 0.588 & 0.228 & 0.453 & 0.56 / 0.98 / 0.17\\
+CopulaGAN & 0.554 & 0.600 & 0.202 & 0.544 & 0.89 / 0.79 / 0.40\\
+SMOTE & 0.553 & 0.604 & 0.231 & 0.507 & 0.88 / 1.00 / 0.19\\
+Cond.\ WGAN-GP & 0.543 & 0.605 & 0.224 & 0.538 & 0.97 / 0.99 / 0.32\\
+Real data only & 0.541 & 0.599 & \textbf{0.235} & 0.441 & 0.81 / 1.00 / 0.10\\
+Diffusion & 0.541 & 0.602 & 0.224 & 0.531 & 0.90 / 0.99 / 0.26\\
+\midrule
+Persistence (no model) & 0.577 & 0.586 & 0.191 & 0.565 & --\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \textbf{Best methods.} CTGAN and TVAE with EVT tail focus rank first on validation and reach the highest
+        severe PR-AUC on test (0.601, against 0.441 for real data only, better in 100\% of month resamples) with
+        the smallest seed-to-seed spread ($\pm0.009$ and $\pm0.011$). They are ahead of diffusion with EVT tail
+        focus on severe days (+0.030 and +0.028) but not convincingly (92\% and 88\% of resamples); the top
+        EVT-tail methods are statistically close.
+  \item \textbf{Against persistence.} CTGAN + EVT tail beats persistence convincingly on overall PR-AUC (99\%)
+        and onset (98\%), and is ahead on severe days (+0.047, 92\%). Real data only falls behind persistence on
+        severe days (ahead in only 10\% of resamples).
+  \item \textbf{Interpolation.} SMOTE gives a small severe gain over real data only (+0.055, 96\%); Borderline-SMOTE
+        and ADASYN give none. All three are clearly behind diffusion with EVT tail focus on severe days.
+  \item \textbf{Onset cost.} Every generator lowers onset skill slightly compared with real data only (0.235);
+        EVT tail versions lose less, and diffusion with EVT tail focus loses least (0.228).
+  \item \textbf{Cost.} The Gaussian copula with EVT tail focus trains in 2 minutes on a T4 and ranks third on
+        validation; it is the best choice when compute is scarce.
+\end{itemize}
+
+\subsection{Realism is not usefulness}
+\begin{table}[H]
+\centering\small
+\caption{Realism of each synthetic set (EVT-tail version). Detection AUC: a classifier separating synthetic from
+real extremes (0.5 = indistinguishable). Closeness: median distance to the nearest real extreme, relative to
+that of unseen real extremes (1 = as close as real days; $\ll1$ = copying).}\label{tab:realism}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Method & Detection AUC & Closeness & Severe PR-AUC\\
+\midrule
+SMOTE / Borderline-SMOTE / ADASYN & 0.996--0.997 & 0.81--0.96 & 0.450--0.507\\
+Diffusion + EVT tail & \textbf{0.944} & \textbf{2.09} & 0.579\\
+Cond.\ WGAN-GP + EVT tail & 0.996 & 3.89 & 0.579\\
+Gaussian copula + EVT tail & 1.000 & 5.39 & 0.558\\
+TVAE + EVT tail & 1.000 & 5.49 & 0.601\\
+CTGAN + EVT tail & 1.000 & 6.60 & 0.601\\
+CopulaGAN + EVT tail & 1.000 & 7.07 & 0.591\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\optfig{figures/fig_realism.png}{0.82\linewidth}
+\caption{Realism (distance to real extremes) against usefulness (severe PR-AUC of the seed-averaged model).
+Lines join the plain and EVT-tail versions of the same generator.}
+\label{fig:realism}
+\end{figure}
+
+The diffusion model produces by far the most realistic synthetic extremes, yet CTGAN and TVAE data---which a
+classifier separates from real data perfectly and which lie five to seven times farther from real days---help
+LightGBM as much or more (Table~\ref{tab:realism}, Figure~\ref{fig:realism}). None of the generators copies real
+rows (closeness above 1). For a tree classifier, what matters most appears to be \emph{where} the synthetic
+positives are placed---deep in the high-distance, very hot region selected by the EVT tail focus---rather than
+whether each synthetic day is a plausible weather situation. Interpolation methods stay close to real data
+and cannot move beyond the observed extremes, which explains their small effect.
+
+% =============================================================================
+\part*{Part III: Is a generator needed? (in progress)}
+\addcontentsline{toc}{part}{Part III: Is a generator needed? (in progress)}
+
+\section{Control experiment: EVT tail emphasis without a generator (Step 13)}
+\subsection{Motivation and design}
+Part II shows that unrealistic synthetic days help as much as realistic ones, provided they are chosen with
+the EVT tail focus. This raises the question whether the gain needs a generator at all. Step 13 keeps
+everything as in Step 12 (same LightGBM, five seeds, one extra extreme per real extreme) and adds three methods
+that use only real data:
+\begin{itemize}
+  \item \textbf{Random oversampling}: copies of random real extremes.
+  \item \textbf{EVT-tail oversampling}: copies of real extremes chosen with the same EVT tail target as the
+        generators (60\% from the top 20\% of each season's tail); the rare severe days are copied about three
+        times each.
+  \item \textbf{EVT-tail weighting}: no copies; each real extreme receives a training weight that adds the same
+        tail emphasis (from about $1.5\times$ for mild extremes to about $4\times$ for the most severe), with a
+        total extra weight equal to one copy of every extreme.
+\end{itemize}
+They are compared with real data only, the four best EVT-tail generators of Step 12 and persistence.
+
+\subsection{Results}
+\todobox{Fill in from \texttt{results/step13/step13\_summary.txt} when Step 13 has finished, and add the figure
+\texttt{generator\_vs\_reweighting.png}.}
+
+\begin{table}[H]
+\centering\small
+\caption{Step 13, five training seeds: test mean $\pm$ standard deviation.}\label{tab:step13}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Method & PR-AUC & Onset PR-AUC & Severe PR-AUC\\
+\midrule
+Real data only & $0.586\pm0.007$ & $0.226\pm0.005$ & $0.411\pm0.042$\\
+Random oversampling & \pending & \pending & \pending\\
+EVT-tail oversampling & \pending & \pending & \pending\\
+EVT-tail weighting & \pending & \pending & \pending\\
+CTGAN + EVT tail & $0.602\pm0.004$ & $0.213\pm0.002$ & $0.581\pm0.009$\\
+TVAE + EVT tail & $0.603\pm0.003$ & $0.215\pm0.005$ & $0.583\pm0.011$\\
+Gaussian copula + EVT tail & $0.603\pm0.007$ & $0.221\pm0.003$ & $0.546\pm0.034$\\
+Diffusion + EVT tail & $0.601\pm0.004$ & $0.222\pm0.006$ & $0.549\pm0.020$\\
+Persistence (no model) & 0.586 & 0.191 & 0.565\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{How the result will be read.}
+If EVT-tail oversampling or weighting matches the best generators, the active ingredient is the EVT tail
+emphasis, and generators add little for this classifier. If the generators clearly win, generating new days adds
+value beyond re-weighting the real extremes. EVT-tail against random oversampling isolates the effect of EVT
+without any generator. Interpretation: \pending.
+
+% =============================================================================
 \section{Discussion}
-\paragraph{Why tail emphasis, not plain EVT sampling.} The fitted GPD describes the observed severities
-well (that is what a good fit means), so drawing from it reproduces almost the same distribution as
-copying real severities, and adds little information. The useful role of EVT here is to tell the generator
-\emph{where} the real data are sparse and how the tail continues: requesting 60\% of synthetic extremes from
-the upper 20\% of the GPD fills exactly the region where LightGBM has too few examples to learn, and the
-bounded GPD with a cap keeps the extrapolation physically plausible. A diffusion model is necessary for
-this: it follows the requested severity (Spearman 0.62--0.67), whereas CTGAN ignored it (0.04).
+\paragraph{EVT is most useful for deciding \emph{where} to add data.} The fitted GPD describes observed
+severities well, so drawing from it reproduces almost the same severities as the data and adds little (Part I).
+The useful role of EVT is to locate the sparse upper tail and to bound how far it extends: asking for 60\% of
+synthetic extremes from the upper 20\% of the GPD fills exactly the region where the classifier has too few
+examples. This held for every generator family in Part II.
+
+\paragraph{Realism versus usefulness.} The generator ranking for a fixed tree classifier differs from a ranking by
+realism. Diffusion is the only generator that follows a requested severity and produces nearly
+indistinguishable, physically valid rows; it is therefore the right tool when synthetic weather must be
+plausible (for example for scenario analysis). For the narrow purpose of improving LightGBM, cheaper generators
+with EVT tail selection were at least as good.
+
+\paragraph{Earlier negative results for CTGAN.} In Part I CTGAN data hurt the classifier. That comparison used
+8.7 synthetic rows per real extreme and one seed; under the fixed protocol of Part II (one synthetic per real
+extreme, the same physics clean-up for all generators, five seeds), CTGAN helps. The amount of synthetic data
+and the evaluation protocol matter as much as the generator.
 
 \paragraph{How much synthetic data.} Synthetic extremes are useful in moderation. When they outnumber real
-extremes 8.7 to 1, the classifier increasingly learns the synthetic distribution: onset skill falls by
-0.03 in every seed and the EVT advantage disappears. One synthetic per real extreme was best for both
-severe and onset skill.
+extremes 8.7 to 1, onset skill falls in every seed and the EVT advantage disappears.
 
-\paragraph{Persistence.} Next-day heat at a grid cell is dominated by persistence: the strongest single
-predictor is how far today already is above tomorrow's threshold. The models' advantage over persistence
-is therefore modest in absolute terms (PR-AUC +0.02, CSI 0.405 for both at their operating points) and
-lies mainly in onset days, which persistence cannot anticipate, and, with EVT augmentation, in no longer
-falling behind it on the most severe days.
+\paragraph{Persistence.} Next-day heat at a grid cell is dominated by persistence: the strongest single predictor
+is how far today already is above tomorrow's threshold. The models' advantage over persistence is therefore
+modest in absolute terms (PR-AUC +0.02--0.03, similar CSI) and lies mainly in heatwave onsets, which persistence
+cannot anticipate, and, with EVT augmentation, in no longer falling behind it on the most severe days.
 
-\paragraph{Lessons on evaluation.} Month-block bootstrap intervals are wide ($\pm0.07$--0.2) because the
-test decade contains a limited number of independent heat events. A paired test on one training run
-measured test-sample uncertainty but not training randomness, and a one-seed result that looked
-convincing (share 1.00) did not hold up across seeds. Effects on rare extremes should be judged over
-several seeds or with seed-averaged models.
+\paragraph{Lessons on evaluation.} Month-block bootstrap intervals are wide because the test decade contains a
+limited number of independent heat events, and a one-seed result that looked convincing did not hold across
+seeds. Effects on rare extremes should be judged over several seeds or with seed-averaged models, with all
+choices made on a separate validation period.
 
 \section{Limitations}
 \begin{itemize}
-  \item Labels and features come from a reanalysis; a check of the severe heat days against station
-        observations (Shimla, Sundernagar, Bhuntar) has not been run yet.
-  \item The test decade has twice the training rate of heat extremes. All models are trained on
-        1981--2010 and face this shift; no model was adapted to it.
-  \item Only next-day seasonal heat extremes were modelled; cold tails are not yet captured by a single
-        GPD.
-  \item EVT guides the generator at sampling time; it is not part of the diffusion training loss.
-  \item The tail-emphasis setting (half of the requests from the upper 20\%) and the ratio grid were
-        fixed by hand; only the ratio was chosen on validation.
-  \item The MLP did not benefit from synthetic data in any form; whether a different neural classifier,
-        loss weighting of synthetic rows, or the overlap-class trick of~\cite{dsouza2025overlap} changes
-        this is open.
-  \item The general-purpose claim of the framework is supported by one case study; public imbalanced
-        benchmarks were not tested.
-  \item All experiments run on free Colab resources (T4 GPU or two CPU cores), which limited model size,
-        training data (half of 1981--2010) and the number of seeds.
+  \item Labels and features come from a reanalysis; a check of severe heat days against station observations
+        (Shimla, Sundernagar, Bhuntar) has not been run.
+  \item The test decade has twice the training rate of heat extremes; no model was adapted to this shift.
+  \item Only next-day seasonal heat extremes were modelled.
+  \item EVT guides generation at sampling or selection time; it is not part of any generator's training loss.
+  \item For unconditional generators, EVT tail selection relies on a severity judge trained on real extremes;
+        the judge rates synthetic rows as more severe than real ones, so their tail positions are approximate.
+  \item The tail-focus setting (half from the upper 20\%) was fixed by hand; only the amount of synthetic data
+        was chosen on validation.
+  \item One classifier family (LightGBM) and one case study; an MLP did not benefit from synthetic data.
+  \item Free Colab resources (T4 GPU or two CPU cores) limited training data (half of 1981--2010), generator
+        size and the number of seeds.
 \end{itemize}
 
 \section{Conclusion and future work}
-Treating the minority class as a tail and using EVT to decide which severities a conditional diffusion
-model generates improves the prediction of the most severe next-day heat extremes in Himachal Pradesh,
-robustly across training seeds, provided that EVT is used to emphasise the sparse upper tail and that
-synthetic data do not outnumber real extremes. The resulting seed-averaged model is the only one in this
-study that beats a strong persistence baseline on overall and onset skill without losing to it on the
-most severe days. Classic rebalancing, GAN-based generation and plain GPD sampling gave no reliable gain.
+Treating the minority class as a tail and using an extreme value model to decide which extremes to add
+improves the prediction of the most severe next-day heat extremes in Himachal Pradesh, robustly across
+training seeds. With a fixed LightGBM classifier, EVT tail focus improved every one of six generators, most
+consistently on heatwave onsets, and CTGAN and TVAE with EVT tail focus gave the best results (severe PR-AUC
+0.601 against 0.441 for real data only), beating a strong persistence baseline on overall and onset skill. The
+most realistic generator (diffusion) was not the most useful for the classifier. Whether a generator is needed
+at all, or the EVT emphasis alone suffices, is being tested (Part III): \pending.
 
-Future work: station validation of the severe events; a GPD-likelihood term inside diffusion training;
-choosing the tail emphasis on validation; cold extremes and longer lead times; and public imbalanced
-benchmarks to test the framework beyond weather data.
+Future work: station validation of the severe events; choosing the tail emphasis on validation; a GPD term
+inside generator training; spatial models that use neighbouring cells; longer lead times, where persistence is
+weaker; and public imbalanced benchmarks to test the framework beyond weather data.
 
 \section*{Reproducibility}
-All code is in the GitHub repository \texttt{Divyansh-jain2/Major\_Technical\_Project}, folder
-\texttt{steps/}. Each step runs as one Colab cell, reads only earlier outputs, writes only to its own
-folder, can be resumed after a disconnect, and saves a text summary.
+All code is in the GitHub repository \url{https://github.com/Divyansh-jain2/Major_Technical_Project}, folder
+\texttt{steps/}.
+Each step runs as one Colab cell, reads only earlier outputs, writes only to its own folder, can be resumed after
+a disconnect and saves a text summary. Report figures are produced by \texttt{report/make\_figures.py}.
 
 \begin{table}[H]
 \centering\small
@@ -602,61 +846,69 @@ Step & Script & Content\\
 \midrule
 1--2 & \texttt{step1\_check\_processed.py}, \texttt{step2\_build\_dataset.py} & verification, labels, splits\\
 3, 3b & \texttt{step3\_evt\_and\_baselines.py}, \texttt{step3b\_fix\_evt\_and\_features.py} & EVT fits, baselines\\
-4, 5 & \texttt{step4\_ctgan\_evt.py}, \texttt{step5\_tail\_conditioned.py} & CTGAN experiments\\
+4, 5 & \texttt{step4\_ctgan\_evt.py}, \texttt{step5\_tail\_conditioned.py} & first CTGAN experiments\\
 6 & \texttt{step6\_build\_v3.py} & dataset v3 (long-history features)\\
 7 & \texttt{step7\_evt\_diffusion.py} & EVT-guided diffusion, control check\\
 8 & \texttt{step8\_classify\_evaluate.py} & all methods, two classifiers\\
-9 & \texttt{step9\_ratio\_blend\_seeds.py} & ratio sweep, blends, seed check\\
-10 & \texttt{step10\_seed\_ensembles.py} & five seeds, ensembles, final tests\\
+9 & \texttt{step9\_ratio\_blend\_seeds.py} & amount of synthetic data, blends, seed check\\
+10 & \texttt{step10\_seed\_ensembles.py} & five seeds, ensembles\\
+11 & \texttt{step11\_generator\_zoo.py} & Gaussian copula, TVAE, CTGAN, CopulaGAN, conditional WGAN-GP\\
+12 & \texttt{step12\_compare\_generators.py} & fixed-LightGBM comparison of all generators\\
+13 & \texttt{step13\_evt\_without\_generator.py} & control: EVT emphasis without a generator\\
 \bottomrule
 \end{tabular}}
 \end{table}
 
 % -----------------------------------------------------------------------------
 \begin{thebibliography}{99}
-\bibitem{coles2001} S.~Coles. \textit{An Introduction to Statistical Modeling of Extreme Values}.
-  Springer, 2001.
+\bibitem{coles2001} S.~Coles. \textit{An Introduction to Statistical Modeling of Extreme Values}. Springer, 2001.
 \bibitem{pickands1975} J.~Pickands. Statistical inference using extreme order statistics.
   \textit{Annals of Statistics}, 3(1):119--131, 1975.
 \bibitem{balkema1974} A.~A.~Balkema and L.~de~Haan. Residual life time at great age.
   \textit{Annals of Probability}, 2(5):792--804, 1974.
-\bibitem{chawla2002smote} N.~V.~Chawla, K.~W.~Bowyer, L.~O.~Hall and W.~P.~Kegelmeyer. SMOTE: Synthetic
-  minority over-sampling technique. \textit{Journal of Artificial Intelligence Research}, 16:321--357, 2002.
-\bibitem{goodfellow2014gan} I.~Goodfellow et al. Generative adversarial nets. In \textit{Advances in
-  Neural Information Processing Systems}, 2014.
-\bibitem{xu2019ctgan} L.~Xu, M.~Skoularidou, A.~Cuesta-Infante and K.~Veeramachaneni. Modeling tabular
-  data using conditional GAN. In \textit{Advances in Neural Information Processing Systems}, 2019.
-\bibitem{ho2020ddpm} J.~Ho, A.~Jain and P.~Abbeel. Denoising diffusion probabilistic models. In
-  \textit{Advances in Neural Information Processing Systems}, 2020.
-\bibitem{nichol2021improved} A.~Nichol and P.~Dhariwal. Improved denoising diffusion probabilistic models.
-  In \textit{International Conference on Machine Learning}, 2021.
+\bibitem{chawla2002smote} N.~V.~Chawla, K.~W.~Bowyer, L.~O.~Hall and W.~P.~Kegelmeyer. SMOTE: Synthetic minority
+  over-sampling technique. \textit{Journal of Artificial Intelligence Research}, 16:321--357, 2002.
+\bibitem{han2005borderline} H.~Han, W.-Y.~Wang and B.-H.~Mao. Borderline-SMOTE: A new over-sampling method in
+  imbalanced data sets learning. In \textit{International Conference on Intelligent Computing}, 2005.
+\bibitem{he2008adasyn} H.~He, Y.~Bai, E.~A.~Garcia and S.~Li. ADASYN: Adaptive synthetic sampling approach for
+  imbalanced learning. In \textit{IEEE International Joint Conference on Neural Networks}, 2008.
+\bibitem{goodfellow2014gan} I.~Goodfellow et al. Generative adversarial nets. In \textit{Advances in Neural
+  Information Processing Systems}, 2014.
+\bibitem{gulrajani2017wgangp} I.~Gulrajani, F.~Ahmed, M.~Arjovsky, V.~Dumoulin and A.~Courville. Improved training
+  of Wasserstein GANs. In \textit{Advances in Neural Information Processing Systems}, 2017.
+\bibitem{xu2019ctgan} L.~Xu, M.~Skoularidou, A.~Cuesta-Infante and K.~Veeramachaneni. Modeling tabular data using
+  conditional GAN. In \textit{Advances in Neural Information Processing Systems}, 2019.
+\bibitem{patki2016sdv} N.~Patki, R.~Wedge and K.~Veeramachaneni. The Synthetic Data Vault. In \textit{IEEE
+  International Conference on Data Science and Advanced Analytics}, 2016.
+\bibitem{ho2020ddpm} J.~Ho, A.~Jain and P.~Abbeel. Denoising diffusion probabilistic models. In \textit{Advances in
+  Neural Information Processing Systems}, 2020.
+\bibitem{nichol2021improved} A.~Nichol and P.~Dhariwal. Improved denoising diffusion probabilistic models. In
+  \textit{International Conference on Machine Learning}, 2021.
 \bibitem{song2021ddim} J.~Song, C.~Meng and S.~Ermon. Denoising diffusion implicit models. In
   \textit{International Conference on Learning Representations}, 2021.
-\bibitem{ho2022cfg} J.~Ho and T.~Salimans. Classifier-free diffusion guidance. \textit{NeurIPS Workshop
-  on Deep Generative Models and Downstream Applications}, 2021; arXiv:2207.12598.
-\bibitem{kotelnikov2023tabddpm} A.~Kotelnikov, D.~Baranchuk, I.~Rubachev and A.~Babenko. TabDDPM:
-  Modelling tabular data with diffusion models. In \textit{International Conference on Machine
-  Learning}, 2023.
+\bibitem{ho2022cfg} J.~Ho and T.~Salimans. Classifier-free diffusion guidance. \textit{NeurIPS Workshop on Deep
+  Generative Models and Downstream Applications}, 2021; arXiv:2207.12598.
+\bibitem{kotelnikov2023tabddpm} A.~Kotelnikov, D.~Baranchuk, I.~Rubachev and A.~Babenko. TabDDPM: Modelling tabular
+  data with diffusion models. In \textit{International Conference on Machine Learning}, 2023.
 \bibitem{elor2022smote} Y.~Elor and H.~Averbuch-Elor. To SMOTE, or not to SMOTE? arXiv:2201.08528, 2022.
-\bibitem{dsouza2025overlap} A.~D'souza, Swetha~M and S.~Sarawagi. Synthetic tabular data generation for
-  imbalanced classification: the surprising effectiveness of an overlap class. In \textit{AAAI Conference
-  on Artificial Intelligence}, 2025.
-\bibitem{bhatia2021exgan} S.~Bhatia, A.~Jain and B.~Hooi. ExGAN: Adversarial generation of extreme
-  samples. In \textit{AAAI Conference on Artificial Intelligence}, 2021.
-\bibitem{boulaguiem2022evtgan} Y.~Boulaguiem, J.~Zscheischler, E.~Vignotto, K.~van der Wiel and
-  S.~Engelke. Modeling and simulating spatial extremes by combining extreme value theory with generative
-  adversarial networks. \textit{Environmental Data Science}, 1:e5, 2022.
-\bibitem{pandey2025heavy} K.~Pandey et al. Heavy-tailed diffusion models. In \textit{International
-  Conference on Learning Representations}, 2025.
-\bibitem{jalalzai2018extreme} H.~Jalalzai, S.~Cl\'emen\c{c}on and A.~Sabourin. On binary classification in
-  extreme regions. In \textit{Advances in Neural Information Processing Systems}, 2018.
-\bibitem{lopezgomez2023heat} I.~Lopez-Gomez, A.~McGovern, S.~Agrawal and J.~Hickey. Global extreme heat
-  forecasting using neural weather models. \textit{Artificial Intelligence for the Earth Systems}, 2023;
-  arXiv:2205.10972.
+\bibitem{dsouza2025overlap} A.~D'souza, Swetha~M and S.~Sarawagi. Synthetic tabular data generation for imbalanced
+  classification: the surprising effectiveness of an overlap class. In \textit{AAAI Conference on Artificial
+  Intelligence}, 2025.
+\bibitem{bhatia2021exgan} S.~Bhatia, A.~Jain and B.~Hooi. ExGAN: Adversarial generation of extreme samples. In
+  \textit{AAAI Conference on Artificial Intelligence}, 2021.
+\bibitem{boulaguiem2022evtgan} Y.~Boulaguiem, J.~Zscheischler, E.~Vignotto, K.~van der Wiel and S.~Engelke. Modeling
+  and simulating spatial extremes by combining extreme value theory with generative adversarial networks.
+  \textit{Environmental Data Science}, 1:e5, 2022.
+\bibitem{pandey2025heavy} K.~Pandey et al. Heavy-tailed diffusion models. In \textit{International Conference on
+  Learning Representations}, 2025.
+\bibitem{jalalzai2018extreme} H.~Jalalzai, S.~Cl\'emen\c{c}on and A.~Sabourin. On binary classification in extreme
+  regions. In \textit{Advances in Neural Information Processing Systems}, 2018.
+\bibitem{lopezgomez2023heat} I.~Lopez-Gomez, A.~McGovern, S.~Agrawal and J.~Hickey. Global extreme heat forecasting
+  using neural weather models. \textit{Artificial Intelligence for the Earth Systems}, 2023; arXiv:2205.10972.
 \bibitem{ke2017lightgbm} G.~Ke et al. LightGBM: A highly efficient gradient boosting decision tree. In
   \textit{Advances in Neural Information Processing Systems}, 2017.
-\bibitem{munoz2021era5land} J.~Mu\~noz-Sabater et al. ERA5-Land: a state-of-the-art global reanalysis
-  dataset for land applications. \textit{Earth System Science Data}, 13:4349--4383, 2021.
+\bibitem{munoz2021era5land} J.~Mu\~noz-Sabater et al. ERA5-Land: a state-of-the-art global reanalysis dataset for
+  land applications. \textit{Earth System Science Data}, 13:4349--4383, 2021.
 \end{thebibliography}
 
 \end{document}
