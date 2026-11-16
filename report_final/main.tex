@@ -389,6 +389,42 @@ checked against the raw files; units were converted and accumulated variables sh
 \label{fig:area}
 \end{figure}
 
+\subsection{Why ERA5-Land, and the Data Sets Not Used}
+The data had to meet five needs. (1)~\emph{Long record}: extreme days are about 1\% of days, so decades are needed to
+have enough of them, plus a fixed 1981--2010 baseline and unseen test years up to 2025. (2)~\emph{Fine grid}:
+Himachal rises from 300\,m to over 5\,km, and a valley and a ridge 20\,km apart have very different climates.
+(3)~\emph{No gaps}: every cell must have every day. (4)~\emph{Many variables}: humidity, soil moisture, radiation and
+rain, not only temperature. (5)~\emph{Free and still updated}. ERA5-Land is the only option found that meets all five.
+Table~\ref{tab:datasets} lists the other data sets that were considered.
+
+\begin{table}[H]
+\centering
+\caption{Data sets considered for the study}
+\label{tab:datasets}
+\footnotesize
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{2.5cm}|>{\raggedright\arraybackslash}p{2.6cm}|>{\raggedright\arraybackslash}p{2.0cm}|>{\raggedright\arraybackslash}X|}
+\hline
+\textbf{Data set} & \textbf{Grid / coverage} & \textbf{Period} & \textbf{Why not used}\\ \hline
+\textbf{ERA5-Land}~\cite{munoz2021era5land} (chosen) & 0.1$^\circ$ ($\approx$9\,km), 529 cells & 1950--now & Used: long, fine,
+  gap-free, many variables \\ \hline
+ERA5~\cite{hersbach2020era5} & 0.25$^\circ$ ($\approx$28\,km), $\approx$85 cells & 1940--now & Too coarse: valleys and
+  ridges fall in the same cell; ERA5-Land is its finer land version \\ \hline
+IMD gridded temperature~\cite{srivastava2009imd} & 1$^\circ$, fewer than 10 cells & 1951--now & Far too coarse;
+  interpolated from few hill stations; temperature only \\ \hline
+IMDAA~\cite{rani2021imdaa} & 12\,km & 1979--2018 at release & Does not cover the test years up to 2025 \\ \hline
+MERRA-2~\cite{gelaro2017merra2} & 0.5$^\circ\times$0.625$^\circ$ & 1980--now & Too coarse for mountains \\ \hline
+GSOD stations~\cite{gsod} & Points; 3 usable in the state & 2000--2025 checked & Only 3 stations (Shimla,
+  Sundernagar, Bhuntar), 33--72\% of days present, about 9 usable years each; too few extremes to train on.
+  Kept as a reference for later checks \\ \hline
+CMIP6 climate models~\cite{eyring2016cmip6} & $\approx$100\,km & Simulated & Simulated weather, not the real days, so it
+  cannot be used to predict a real tomorrow \\ \hline
+\end{tabularx}
+\end{table}
+
+\noindent ERA5-Land is a model reconstruction, not a measurement, and can be biased in steep terrain. The labels are
+therefore relative to each cell's own climate (its own 99th percentile), which reduces the effect of a constant bias,
+and checking the severe days against stations is left as future work.
+
 \section{Extreme Heat Days, Features and Splits}
 For cell $c$ and season $g$, the threshold $u_{c,g}$ is the 99th percentile of daily maximum temperature in
 1981--2010; a day is extreme if $T^{\max}_{c,t}>u_{c,g(t)}$. Thresholds fall by 6--7\,$^\circ$C per km of altitude
@@ -671,6 +707,12 @@ generation methods under a fixed classifier; and open, reproducible code that ru
 \bibitem{ke2017lightgbm} G. Ke et al., LightGBM: A highly efficient gradient boosting decision tree, Advances in Neural Information Processing Systems, 2017.
 \bibitem{munoz2021era5land} J. Mu\~noz-Sabater et al., \reflink{https://doi.org/10.5194/essd-13-4349-2021}{ERA5-Land: A state-of-the-art global reanalysis dataset for land applications}, Earth System Science Data 13 (2021) 4349--4383.
 \bibitem{farr2007srtm} T. G. Farr et al., \reflink{https://doi.org/10.1029/2005RG000183}{The Shuttle Radar Topography Mission}, Reviews of Geophysics 45 (2007) RG2004.
+\bibitem{hersbach2020era5} H. Hersbach et al., \reflink{https://doi.org/10.1002/qj.3803}{The ERA5 global reanalysis}, Quarterly Journal of the Royal Meteorological Society 146 (2020) 1999--2049.
+\bibitem{srivastava2009imd} A. K. Srivastava, M. Rajeevan and S. R. Kshirsagar, \reflink{https://doi.org/10.1002/asl.232}{Development of a high resolution daily gridded temperature data set (1969--2005) for the Indian region}, Atmospheric Science Letters 10 (2009) 249--254.
+\bibitem{rani2021imdaa} S. I. Rani et al., \reflink{https://doi.org/10.1175/JCLI-D-20-0412.1}{IMDAA: High-resolution satellite-era reanalysis for the Indian monsoon region}, Journal of Climate 34 (2021) 5109--5133.
+\bibitem{gelaro2017merra2} R. Gelaro et al., \reflink{https://doi.org/10.1175/JCLI-D-16-0758.1}{The Modern-Era Retrospective Analysis for Research and Applications, Version 2 (MERRA-2)}, Journal of Climate 30 (2017) 5419--5454.
+\bibitem{gsod} NOAA National Centers for Environmental Information, \reflink{https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.ncdc:C00516}{Global Surface Summary of the Day (GSOD)}.
+\bibitem{eyring2016cmip6} V. Eyring et al., \reflink{https://doi.org/10.5194/gmd-9-1937-2016}{Overview of the Coupled Model Intercomparison Project Phase 6 (CMIP6) experimental design and organization}, Geoscientific Model Development 9 (2016) 1937--1958.
 \end{thebibliography}}
 
 \end{document}
