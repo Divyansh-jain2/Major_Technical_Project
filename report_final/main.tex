@@ -195,8 +195,8 @@ extreme days are rare: only about one day in a hundred at a given place, and the
 This project treats these days as the \emph{tail} of the temperature distribution, models that tail with Extreme
 Value Theory (EVT), and uses the model to decide which extra extreme days are added to the training data of a fixed
 classifier. The task is to predict whether tomorrow will be an extreme heat day at each of 529 ERA5-Land grid cells
-(1981--2025) using LightGBM. Ten ways of adding extreme days were compared over five training seeds, from SMOTE to
-GANs, a VAE and a conditional diffusion model, each with and without \emph{EVT tail focus}, which places 60\% of the
+(1981--2025) using LightGBM. Six ways of adding extreme days were compared over five training seeds: three SMOTE variants,
+a GAN (CTGAN), a VAE (TVAE) and a conditional diffusion model, the last three each with and without \emph{EVT tail focus}, which places 60\% of the
 added days in the most severe 20\% of the fitted tail. EVT tail focus improved every generator. CTGAN and TVAE with
 EVT tail focus raised the skill on the most severe days from 0.441 to 0.601 PR-AUC and beat a persistence baseline on
 overall skill. A control experiment showed that the EVT emphasis works even without a generator, while generators add
@@ -232,7 +232,6 @@ SMOTE & Synthetic Minority Over-sampling Technique \\ \hline
 SRTM & Shuttle Radar Topography Mission \\ \hline
 TVAE & Tabular Variational Autoencoder \\ \hline
 VAE & Variational Autoencoder \\ \hline
-WGAN-GP & Wasserstein GAN with Gradient Penalty \\ \hline
 \end{tabularx}
 \end{center}
 
@@ -358,9 +357,8 @@ A GAN~\cite{goodfellow2014gan} trains a generator $G$ against a discriminator $D
 \begin{equation}
   \min_G\max_D\; \mathbb{E}_{x}[\log D(x)]+\mathbb{E}_{z}[\log(1-D(G(z)))].
 \end{equation}
-WGAN-GP~\cite{gulrajani2017wgangp} stabilises training with a gradient penalty; CTGAN and TVAE~\cite{xu2019ctgan} adapt
-GANs and VAEs~\cite{kingma2014vae} to tables; a Gaussian copula~\cite{patki2016sdv} models column margins and their
-correlation. Diffusion models~\cite{ho2020ddpm} add noise $q(x_\tau|x_0)=\mathcal{N}(\sqrt{\bar\alpha_\tau}x_0,(1-\bar\alpha_\tau)I)$
+CTGAN and TVAE~\cite{xu2019ctgan} adapt
+GANs and VAEs~\cite{kingma2014vae} to tables. Diffusion models~\cite{ho2020ddpm} add noise $q(x_\tau|x_0)=\mathcal{N}(\sqrt{\bar\alpha_\tau}x_0,(1-\bar\alpha_\tau)I)$
 and learn to remove it:
 \begin{equation}
   \mathcal{L}=\mathbb{E}\left\lVert\epsilon-\epsilon_\theta(x_\tau,\tau,c)\right\rVert^2 .
@@ -522,8 +520,7 @@ never exceeds the maximum.
 \hline
 \textbf{Family} & \textbf{Methods} & \textbf{How EVT is applied}\\ \hline
 Interpolation & SMOTE, Borderline-SMOTE, ADASYN & -- \\ \hline
-Statistical, VAE, GAN & Gaussian copula, TVAE, CTGAN, CopulaGAN & Selection from a pool \\ \hline
-Conditional GAN & Conditional WGAN-GP (built here) & Severity requested \\ \hline
+VAE, GAN & TVAE, CTGAN & Selection from a pool \\ \hline
 Diffusion & Conditional diffusion model (built here) & Severity requested \\ \hline
 Control (no generator) & Copies or weights of real extremes & Selection / weighting \\ \hline
 \end{tabular}
@@ -556,9 +553,7 @@ today''.
 \begin{tabular}{|l|c|c|c|}
 \hline
 \textbf{Generator} & \makecell{\textbf{Raw rows}\\\textbf{breaking physics}} & \makecell{\textbf{Follows requested}\\\textbf{severity}} & \makecell{\textbf{Training}\\\textbf{time}} \\ \hline
-Gaussian copula & 12\% & -- & 2 min \\ \hline
-TVAE / CTGAN / CopulaGAN & 69--75\% & -- & 19--25 min \\ \hline
-Conditional WGAN-GP & 9\% & 0.25 & 3 min \\ \hline
+TVAE / CTGAN & 69--75\% & -- & 18--24 min \\ \hline
 Conditional diffusion & $\approx$0\% & 0.67 (real: 0.78) & 30 min \\ \hline
 \end{tabular}
 \end{table}
@@ -598,7 +593,7 @@ Persistence (no model) & 0.586 & 0.191 & 0.565 \\ \hline
 
 \begin{itemize}
   \item \textbf{EVT tail focus improved every generator} on average on all three scores (Figure~\ref{fig:evtgain}),
-        most consistently on heatwave starts; all six top methods on validation used it.
+        most consistently on heatwave starts; all three top methods on validation used it.
   \item \textbf{CTGAN and TVAE with EVT tail focus were best} on the most severe days (0.601 vs 0.441 for real data
         only), and beat persistence on overall skill (0.611 vs 0.586). The top EVT-tail methods are statistically close.
   \item \textbf{Interpolation helps little:} SMOTE gave a small gain; Borderline-SMOTE and ADASYN none.
@@ -699,7 +694,7 @@ Report and presentation & & & & & \gB & & \gB & \gB \\ \hline
 \end{table}
 
 \textbf{Outcomes:} a verified 45-year data set of seasonal heat extremes for 529 grid cells; an extreme value model of
-the heat tail; an EVT-guided conditional diffusion model and conditional WGAN-GP; a fair comparison of ten data
+the heat tail; an EVT-guided conditional diffusion model; a fair comparison of six data
 generation methods under a fixed classifier; and open, reproducible code that runs on free cloud resources:\\
 \url{https://github.com/Divyansh-jain2/Major_Technical_Project}
 
@@ -720,7 +715,6 @@ generation methods under a fixed classifier; and open, reproducible code that ru
 \bibitem{he2008adasyn} H. He, Y. Bai, E. A. Garcia and S. Li, \reflink{https://doi.org/10.1109/IJCNN.2008.4633969}{ADASYN: Adaptive synthetic sampling approach for imbalanced learning}, IEEE International Joint Conference on Neural Networks, 2008.
 \bibitem{elor2022smote} Y. Elor and H. Averbuch-Elor, \reflink{https://arxiv.org/abs/2201.08528}{To SMOTE, or not to SMOTE?}, arXiv:2201.08528, 2022.
 \bibitem{goodfellow2014gan} I. Goodfellow et al., \reflink{https://arxiv.org/abs/1406.2661}{Generative adversarial nets}, Advances in Neural Information Processing Systems, 2014.
-\bibitem{gulrajani2017wgangp} I. Gulrajani, F. Ahmed, M. Arjovsky, V. Dumoulin and A. Courville, \reflink{https://arxiv.org/abs/1704.00028}{Improved training of Wasserstein GANs}, Advances in Neural Information Processing Systems, 2017.
 \bibitem{xu2019ctgan} L. Xu, M. Skoularidou, A. Cuesta-Infante and K. Veeramachaneni, \reflink{https://arxiv.org/abs/1907.00503}{Modeling tabular data using conditional GAN}, Advances in Neural Information Processing Systems, 2019.
 \bibitem{kingma2014vae} D. P. Kingma and M. Welling, \reflink{https://arxiv.org/abs/1312.6114}{Auto-encoding variational Bayes}, International Conference on Learning Representations, 2014.
 \bibitem{patki2016sdv} N. Patki, R. Wedge and K. Veeramachaneni, \reflink{https://doi.org/10.1109/DSAA.2016.49}{The Synthetic Data Vault}, IEEE International Conference on Data Science and Advanced Analytics, 2016.

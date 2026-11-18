@@ -97,10 +97,9 @@ save(fig, "fig_generator_quality.png")
 d = pd.read_csv(os.path.join(HERE, "data", "step12_per_seed.csv"))
 mean = d.groupby("method")[["pr_auc", "onset", "severe"]].mean()
 PERS = {"pr_auc": 0.5864, "onset": 0.1907, "severe": 0.5651}
-G = [("gaussian_copula", "Gaussian copula"), ("tvae", "TVAE"), ("ctgan", "CTGAN"),
-     ("copulagan", "CopulaGAN"), ("cwgan", "Cond. WGAN-GP"), ("diffusion", "Diffusion")]
+G = [("tvae", "TVAE"), ("ctgan", "CTGAN"), ("diffusion", "Diffusion")]
 BASEL = [("none", "Real only"), ("smote", "SMOTE"), ("borderline_smote", "Borderline\nSMOTE"), ("adasyn", "ADASYN")]
-fig, axs = plt.subplots(3, 1, figsize=(11, 10), sharex=True)
+fig, axs = plt.subplots(3, 1, figsize=(9.5, 9.5), sharex=True)
 for ax, (s, lab) in zip(axs, [("severe", "Severe PR-AUC (10% most severe extremes)"),
                               ("pr_auc", "PR-AUC (all days)"), ("onset", "Onset PR-AUC (heatwave starts)")]):
     pos, ticks = 0, []
@@ -137,7 +136,7 @@ fig.tight_layout()
 save(fig, "fig_step12_by_seed.png")
 
 # ---------------------------------------------------------------- EVT effect per generator
-fig, axs = plt.subplots(1, 3, figsize=(11, 3.3), sharey=True)
+fig, axs = plt.subplots(1, 3, figsize=(11, 2.4), sharey=True)
 names = [nm for _, nm in G]
 for ax, (s, lab) in zip(axs, [("pr_auc", "PR-AUC"), ("onset", "Onset PR-AUC"), ("severe", "Severe PR-AUC")]):
     diffs, wins = [], []
@@ -164,11 +163,8 @@ save(fig, "fig_evt_gain.png")
 # ---------------------------------------------------------------- realism vs usefulness (Step 12 ensembles)
 q = pd.DataFrame([
     ("SMOTE", "interp", 0.81, 0.5071), ("Borderline-SMOTE", "interp", 0.88, 0.4533), ("ADASYN", "interp", 0.96, 0.4498),
-    ("Gaussian copula", "plain", 5.70, 0.5553), ("Gaussian copula", "tail", 5.39, 0.5582),
     ("TVAE", "plain", 5.47, 0.5271), ("TVAE", "tail", 5.49, 0.6012),
     ("CTGAN", "plain", 6.65, 0.5950), ("CTGAN", "tail", 6.60, 0.6014),
-    ("CopulaGAN", "plain", 7.22, 0.5439), ("CopulaGAN", "tail", 7.07, 0.5909),
-    ("Cond. WGAN-GP", "plain", 3.76, 0.5375), ("Cond. WGAN-GP", "tail", 3.89, 0.5794),
     ("Diffusion", "plain", 2.04, 0.5305), ("Diffusion", "tail", 2.09, 0.5792)],
     columns=["gen", "kind", "close", "severe"])
 fig, ax = plt.subplots(figsize=(7.6, 4.6))
@@ -199,9 +195,9 @@ print("figures written to", FIG)
 
 # ---------------------------------------------------------------- Step 13: EVT emphasis with and without a generator
 d13 = pd.read_csv(os.path.join(HERE, "data", "step13_per_seed.csv"))
-both = pd.concat([d[d.method.isin(["none", "ctgan_tail", "tvae_tail", "gaussian_copula_tail", "diffusion_tail"])], d13])
+both = pd.concat([d[d.method.isin(["none", "ctgan_tail", "tvae_tail", "diffusion_tail"])], d13])
 M13 = [("none", "Real\nonly", MUTED), ("real_dup_plain", "Random\ncopies", AQUA), ("real_dup_tail", "EVT-tail\ncopies", AQUA),
-       ("real_weight_tail", "EVT-tail\nweights", AQUA), ("gaussian_copula_tail", "Gaussian\ncopula", ORANGE),
+       ("real_weight_tail", "EVT-tail\nweights", AQUA),
        ("diffusion_tail", "Diffusion", ORANGE), ("ctgan_tail", "CTGAN", ORANGE), ("tvae_tail", "TVAE", ORANGE)]
 fig, axs = plt.subplots(3, 1, figsize=(9.5, 9), sharex=True)
 for ax, (s, lab) in zip(axs, [("severe", "Severe PR-AUC (10% most severe extremes)"), ("pr_auc", "PR-AUC (all days)"),
@@ -217,7 +213,7 @@ for ax, (s, lab) in zip(axs, [("severe", "Severe PR-AUC (10% most severe extreme
 axs[-1].set_xticks(range(len(M13)), [m[1] for m in M13], fontsize=9)
 axs[0].annotate("persistence", (3.4, PERS["severe"]), xytext=(0, 4), textcoords="offset points", fontsize=8, color=INK2, ha="right")
 axs[0].text(1.5, 0.385, "no generator", ha="center", fontsize=8.5, color=INK2)
-axs[0].text(5.5, 0.385, "generator + EVT tail focus", ha="center", fontsize=8.5, color=INK2)
+axs[0].text(5.0, 0.385, "generator + EVT tail focus", ha="center", fontsize=8.5, color=INK2)
 axs[0].legend(handles=[Line2D([], [], marker="o", ls="", color=MUTED, label="real data only"),
                        Line2D([], [], marker="o", ls="", color=AQUA, label="extra real extremes (copies or weights)"),
                        Line2D([], [], marker="o", ls="", color=ORANGE, label="extra synthetic extremes")],
