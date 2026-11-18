@@ -425,7 +425,36 @@ CMIP6 climate models~\cite{eyring2016cmip6} & $\approx$100\,km & Simulated & Sim
 therefore relative to each cell's own climate (its own 99th percentile), which reduces the effect of a constant bias,
 and checking the severe days against stations is left as future work.
 
+\subsection{ERA5-Land Variables Used}
+ERA5-Land provides about 50 variables~\cite{munoz2021era5land}. Only those with a clear link to surface heat were
+downloaded, which kept the data small enough for free cloud computing (Table~\ref{tab:vars}). Six variables were used;
+snow depth was downloaded but dropped, because glacier cells hold a fixed placeholder of 10\,m water equivalent.
+Relative humidity was computed from temperature and dewpoint (Magnus formula), and elevation and slope come from SRTM
+terrain, not ERA5-Land. All 57 model inputs (Section~\ref{sec:features}) are built from these variables.
+
+\begin{table}[H]
+\centering
+\caption{ERA5-Land variables considered}
+\label{tab:vars}
+\footnotesize
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{4.3cm}|>{\raggedright\arraybackslash}p{2.1cm}|>{\raggedright\arraybackslash}X|}
+\hline
+\textbf{Variable} & \textbf{Status} & \textbf{Why} \\ \hline
+2\,m air temperature (daily max, min, mean) & Used & The heat signal itself; also defines the label \\ \hline
+2\,m dewpoint temperature & Used & Air moisture; with temperature gives relative humidity \\ \hline
+Total precipitation & Used & Rain cools the surface; dry spells come before heatwaves \\ \hline
+Soil moisture, top layer (0--7\,cm) & Used & Dry soil turns more sunshine into heat \\ \hline
+Surface solar radiation downwards & Used & Sunshine reaching the ground \\ \hline
+Surface pressure & Used & Rising pressure marks settled, clear weather \\ \hline
+Snow depth & Dropped & Glacier cells stuck at a 10\,m placeholder \\ \hline
+10\,m wind, evaporation, skin temperature, runoff, deeper soil layers, thermal radiation, leaf area and other
+  variables & Not downloaded & Weaker or indirect link to next-day heat, and kept the download within free
+  computing limits; wind is left for future work \\ \hline
+\end{tabularx}
+\end{table}
+
 \section{Extreme Heat Days, Features and Splits}
+\label{sec:features}
 For cell $c$ and season $g$, the threshold $u_{c,g}$ is the 99th percentile of daily maximum temperature in
 1981--2010; a day is extreme if $T^{\max}_{c,t}>u_{c,g(t)}$. Thresholds fall by 6--7\,$^\circ$C per km of altitude
 (Figure~\ref{fig:thr}). Extremes nearly doubled in 2016--2025 (1.94\% vs 1.02\% of cell-days).
