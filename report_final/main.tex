@@ -232,6 +232,7 @@ SMOTE & Synthetic Minority Over-sampling Technique \\ \hline
 SRTM & Shuttle Radar Topography Mission \\ \hline
 TVAE & Tabular Variational Autoencoder \\ \hline
 VAE & Variational Autoencoder \\ \hline
+WGAN-GP & Wasserstein GAN with Gradient Penalty \\ \hline
 \end{tabularx}
 \end{center}
 
@@ -509,7 +510,11 @@ Each method adds one synthetic extreme per real extreme (29{,}604 rows) and is u
 (Table~\ref{tab:methods}). Generators that take a severity as input are asked for EVT severities directly; the others
 generate a pool ten times larger, a severity ``judge'' model scores each row, and rows are selected to match the EVT
 target. Every synthetic row is placed on a real grid cell and repaired so that, for example, the minimum temperature
-never exceeds the maximum.
+never exceeds the maximum. In numbers: each generator is trained on the 29{,}604 real extreme rows of the training
+years (TVAE about 19 minutes, CTGAN about 24, diffusion about 30, on a free Colab T4 GPU); TVAE and CTGAN generate a
+pool of 296{,}040 rows (ten per real extreme); after clean-up, 88{,}812 rows (three per real extreme) are kept per set,
+at random (plain) or by EVT selection; and for each seed 29{,}604 of them are drawn and added to the
+$\approx$2.9 million real training rows.
 
 \begin{table}[H]
 \centering
@@ -598,6 +603,25 @@ Persistence (no model) & 0.586 & 0.191 & 0.565 \\ \hline
         only), and beat persistence on overall skill (0.611 vs 0.586). The top EVT-tail methods are statistically close.
   \item \textbf{Interpolation helps little:} SMOTE gave a small gain; Borderline-SMOTE and ADASYN none.
 \end{itemize}
+
+\textbf{Other generators tried.} Three further generators were run in the same way: a Gaussian
+copula~\cite{patki2016sdv}, CopulaGAN and a conditional WGAN-GP built in this project. EVT tail focus improved them
+too (Table~\ref{tab:other}), so all six generators tested gained; they are left out of the main comparison for
+brevity.
+
+\begin{table}[H]
+\centering
+\caption{Other generators tried (severe-day PR-AUC, mean of five seeds)}
+\label{tab:other}
+\small
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Generator} & \textbf{Plain} & \textbf{EVT tail} & \textbf{Gain} & \textbf{Seeds better}\\ \hline
+CopulaGAN & 0.522 & 0.578 & +0.055 & 5/5 \\ \hline
+Gaussian copula & 0.507 & 0.546 & +0.039 & 4/5 \\ \hline
+Conditional WGAN-GP & 0.509 & 0.532 & +0.023 & 4/5 \\ \hline
+\end{tabular}
+\end{table}
 
 \begin{figure}[H]
 \centering
