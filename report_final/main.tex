@@ -39,6 +39,13 @@
 \usepackage[titles]{tocloft}
 \usepackage{fancyhdr}
 \usepackage{setspace}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
+\tikzset{blk/.style={draw=black!55,rounded corners=2pt,align=center,font=\footnotesize,inner sep=4pt,minimum height=1.05cm},
+         nn/.style={blk,fill=orange!12,draw=orange!70!black},
+         lat/.style={blk,fill=blue!8,draw=blue!60!black},
+         io/.style={blk,fill=black!3},
+         arr/.style={-{Stealth[length=2.2mm]},thick,draw=black!65}}
 \usepackage[hidelinks]{hyperref}
 
 \graphicspath{{figures/}}
@@ -380,6 +387,10 @@ The study uses the 529 ERA5-Land~\cite{munoz2021era5land} cells (0.1$^\circ$) in
 (Figure~\ref{fig:area}): daily maximum, minimum and mean temperature, dewpoint, humidity, pressure, radiation, soil
 moisture and rain for 1981--2025 (16{,}436 days), with SRTM terrain~\cite{farr2007srtm}. The processed data were
 checked against the raw files; units were converted and accumulated variables shifted to the correct day.
+The 529 cells come from the download box 30.3--33.3$^\circ$N, 75.5--79.1$^\circ$E: at 0.1$^\circ$ spacing this is
+$31\times37=1{,}147$ cells, of which those whose centre lies inside the state boundary (GADM) are kept. A cell is
+about $9.4\times11.1$\,km ($\approx$105\,km$^2$) at 32$^\circ$N, so the 529 cells cover $\approx$55{,}500\,km$^2$,
+close to the state's area of about 55{,}700\,km$^2$. With four seasons this gives $529\times4=2{,}116$ thresholds.
 
 \begin{figure}[H]
 \centering
@@ -484,8 +495,41 @@ Test (final scores only) & 2016--2025 & 1{,}932{,}437 & 37{,}450 (1.94\%) \\ \hl
 \end{table}
 
 \section{Extreme Value Model and EVT Tail Focus}
-Each excess is standardised by the cell's own variability, $z=(T^{\max}-u)/s$, and a GPD (Eq.~\ref{eq:gpd}) is fitted
-per season on 1981--2010. All heat tails are bounded or nearly so (Figure~\ref{fig:gpdshape}).
+\subsection{Peaks over threshold and standardisation}
+EVT is used in its \emph{peaks-over-threshold} form: only the extreme days, those above $u_{c,g}$, are modelled. The
+99th percentile is our choice of threshold; the theory (Eq.~\ref{eq:gpd}) only requires it to be high enough. Because a
+2\,$^\circ$C excess is large for a calm valley cell and ordinary for a variable mountain cell, each excess is
+standardised by the cell's own variability:
+\begin{equation}
+  z=\frac{T^{\max}_{c,t}-u_{c,g}}{s_{c,g}},
+  \label{eq:z}
+\end{equation}
+where $s_{c,g}$ is the standard deviation of the cell's daily $T^{\max}$ anomaly (departure from its 1981--2010
+seasonal normal) in season $g$. Standardising lets all 529 cells share one tail model per season.
+
+\subsection{Fitting the Generalized Pareto Distribution}
+For each season, and for the whole year, a GPD is fitted by maximum likelihood to the standardised excesses $z$ of
+1981--2010, pooling all cells, with the location fixed at zero. Extremes arrive as events (on 6~October~1983, 522 of the
+529 cells were extreme together), so 95\% intervals for $\xi$ come from 100 bootstrap refits that resample
+\emph{whole days}. Refitting only above the 25th and 50th percentiles of $z$ gave similar shapes, and quantile--quantile
+plots agree with the fit. All heat tails are bounded or nearly so (Table~\ref{tab:gpd}, Figure~\ref{fig:gpdshape}). For
+$\xi<0$ the tail has a finite upper end, the \emph{ceiling} $z^{*}=\sigma/|\xi|$.
+
+\begin{table}[H]
+\centering
+\caption{Fitted GPD shape $\xi$ for heat excesses, 1981--2010}
+\label{tab:gpd}
+\small
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Group} & \textbf{$\xi$, raw excess} & \textbf{$\xi$, standardised $z$} & \textbf{95\% interval (standardised)}\\ \hline
+Whole year & $-0.153$ & $-0.152$ & $[-0.196,\,-0.113]$\\ \hline
+Monsoon & $-0.128$ & $-0.115$ & $[-0.185,\,-0.040]$\\ \hline
+Pre-monsoon & $-0.165$ & $-0.141$ & $[-0.241,\,-0.072]$\\ \hline
+Winter & $-0.074$ & $-0.096$ & $[-0.176,\,-0.032]$\\ \hline
+Post-monsoon & $+0.262$ & $+0.070$ & $[-0.177,\,+0.231]$\\ \hline
+\end{tabular}
+\end{table}
 
 \begin{figure}[H]
 \centering
@@ -494,9 +538,43 @@ per season on 1981--2010. All heat tails are bounded or nearly so (Figure~\ref{f
 \label{fig:gpdshape}
 \end{figure}
 
-The fitted GPD gives every extreme a tail position $q\in[0,1)$. \textbf{EVT tail focus} draws the added extremes from
-$q\sim0.5\,\mathcal{U}(0,1)+0.5\,\mathcal{U}(0.8,1)$, so 60\% of them lie in the rarest 20\% of the tail
-(Figure~\ref{fig:tailfocus}), capped at the tail's upper limit.
+Every season has $\xi<0$ or $\xi\approx0$: heat in Himachal has an upper limit, as expected for temperature. The
+post-monsoon raw shape ($+0.26$) looked heavy-tailed only because cells of very different variability were mixed;
+standardising removes this ($+0.07$, interval including zero).
+
+\subsection{Tail position and EVT tail focus}
+The fitted GPD $F_g$ of season $g$ gives every extreme a \emph{tail position} $q=F_g(z)\in[0,1)$: $q=0.9$ means more
+severe than 90\% of extreme days of that season. \textbf{EVT tail focus} draws the tail positions of the added
+extremes from a two-part mixture,
+\begin{equation}
+  q\sim 0.5\,\mathcal{U}(0,1)+0.5\,\mathcal{U}(0.8,1),
+  \qquad
+  P(q\ge0.8)=0.5\times0.2+0.5\times1=0.6 ,
+  \label{eq:mix}
+\end{equation}
+so 60\% of the added days lie in the rarest 20\% of the tail and each lower fifth receives 10\%
+(Table~\ref{tab:tailmath}, Figure~\ref{fig:tailfocus}). Keeping half of the draws uniform means every part of the tail
+still receives new extremes. Each $q$ is turned back into a severity by inverse-transform sampling and capped:
+\begin{equation}
+  z=\min\!\Big(F_g^{-1}(q),\;0.999\,\sigma_g/|\xi_g|,\;1.5\max_{\text{real}} z_g\Big).
+  \label{eq:cap}
+\end{equation}
+The \emph{plain} version of each method instead uses severities as they occur in the real extremes (no EVT); a further
+variant draws $q\sim\mathcal{U}(0,1)$, i.e.\ the fitted GPD as it is.
+
+\begin{table}[H]
+\centering
+\caption{Where the added extremes fall under EVT tail focus (per 100 added days)}
+\label{tab:tailmath}
+\small
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{Tail position $q$} & \textbf{0--0.2} & \textbf{0.2--0.4} & \textbf{0.4--0.6} & \textbf{0.6--0.8} & \textbf{0.8--1}\\ \hline
+Half drawn anywhere (50) & 10 & 10 & 10 & 10 & 10\\ \hline
+Half drawn from the top (50) & 0 & 0 & 0 & 0 & 50\\ \hline
+\rowcolor{rowhl}\textbf{Total (100)} & 10 & 10 & 10 & 10 & \textbf{60}\\ \hline
+\end{tabular}
+\end{table}
 
 \begin{figure}[H]
 \centering
@@ -504,6 +582,14 @@ $q\sim0.5\,\mathcal{U}(0,1)+0.5\,\mathcal{U}(0.8,1)$, so 60\% of them lie in the
 \caption{Plain sampling versus EVT tail focus}
 \label{fig:tailfocus}
 \end{figure}
+
+\subsection{Placement of the added extremes}
+An added day is neither placed at random nor by hand. (1)~Its \emph{season} is drawn in the same proportions as the
+real extremes. (2)~Its \emph{location} (latitude, longitude) is part of the generated row, learned from where real
+extremes occur. (3)~The location is snapped to the nearest of the 529 cells by a nearest-neighbour search, and the row
+takes that cell's real elevation and slope. (4)~The eight threshold-distance features are recomputed from that cell's
+own threshold $u_{c,g}$, so the label ``extreme'' is consistent with where the day now sits. Every added row is an
+extreme (label 1) above its cell's threshold.
 
 \section{Generation Methods}
 Each method adds one synthetic extreme per real extreme (29{,}604 rows) and is used plain and with EVT tail focus
@@ -531,12 +617,148 @@ Control (no generator) & Copies or weights of real extremes & Selection / weight
 \end{tabular}
 \end{table}
 
+\section{Generator Architectures}
+\label{sec:arch}
+All three generators are trained from scratch on the same 29{,}604 real extreme rows of the training years. A row has
+49 base features (terrain, weather of the last three days and summaries of the last 1--4 weeks) and the season; the
+eight threshold-distance features are not generated but recomputed after placement. Table~\ref{tab:arch} summarises
+the three networks; TVAE and CTGAN use the standard architectures of the authors' \texttt{ctgan} library, and the
+conditional diffusion model was built for this project.
+
+\begin{table}[H]
+\centering
+\caption{Generator architectures and training settings}
+\label{tab:arch}
+\footnotesize
+\begin{tabularx}{\textwidth}{|l|X|X|X|}
+\hline
+ & \textbf{TVAE} & \textbf{CTGAN} & \textbf{Conditional DDPM}\\ \hline
+Type & Variational autoencoder & Conditional Wasserstein GAN & Denoising diffusion model\\ \hline
+Input handling & Mode-specific normalisation (Gaussian mixture, $\le$10 modes); season one-hot & Same as TVAE & Quantile transform of each feature to $\mathcal{N}(0,1)$\\ \hline
+Network & Encoder $128\!\to\!128$ (ReLU) to $\mu,\log\sigma^2\in\mathbb{R}^{128}$; decoder $128\!\to\!128$ (ReLU) & Generator: 2 residual layers of 256 (BatchNorm, ReLU); critic: $256\!\to\!256$ (LeakyReLU 0.2, dropout 0.5), pac 10 & Input, time and condition embeddings to 512; 4 residual blocks (LayerNorm, $512\!\to\!1024\!\to\!512$, SiLU); output 49\\ \hline
+Latent / noise & 128-d code & 128-d noise + season condition & 49-d noise, 1{,}000 steps\\ \hline
+Conditioning & None & Season (training-by-sampling) & Season and severity $z$, classifier-free\\ \hline
+Loss & ELBO: reconstruction ($\times2$) + KL & WGAN-GP + condition cross-entropy & MSE on the added noise\\ \hline
+Optimiser & Adam, weight decay $10^{-5}$ & Adam, $2\!\times\!10^{-4}$, $\beta=(0.5,0.9)$ & AdamW, $10^{-3}$, cosine decay, EMA 0.999\\ \hline
+Training & 300 epochs, batch 500 & 300 epochs, batch 500 & 15{,}000 steps, batch 1{,}024\\ \hline
+New sample & Code $\sim\mathcal{N}(0,I)\to$ decoder & Noise + season $\to$ generator & 50 DDIM steps, guidance $w=2$\\ \hline
+Source & Xu et al.~\cite{xu2019ctgan} & Xu et al.~\cite{xu2019ctgan} & Ho et al.~\cite{ho2020ddpm}; built here\\ \hline
+\end{tabularx}
+\end{table}
+
+\subsection{TVAE}
+Each continuous column is normalised \emph{per mode}: a variational Gaussian mixture splits it into up to ten modes and
+a value is coded by its mode and its position within it; the season is one-hot. The encoder (two fully connected layers
+of 128 units, ReLU) outputs the mean $\mu$ and log-variance of a 128-dimensional code, sampled as
+$\mathbf{h}=\mu+\sigma\odot\epsilon$, $\epsilon\sim\mathcal{N}(0,I)$. The decoder (two layers of 128, ReLU) rebuilds the
+row. Training maximises the evidence lower bound
+\begin{equation}
+  \mathcal{L}_{\text{VAE}}=\mathbb{E}_{q(\mathbf{h}|x)}\big[\log p(x|\mathbf{h})\big]-
+  \mathrm{KL}\big(q(\mathbf{h}|x)\,\|\,\mathcal{N}(0,I)\big),
+\end{equation}
+with the reconstruction term weighted by 2. A new day is made by decoding a code drawn from $\mathcal{N}(0,I)$
+(Figure~\ref{fig:arch-tvae}). Because the reconstruction rewards typical rows, its extremes are mostly mild.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=4mm]
+\node[io] (x) {Real day\\49 + season};
+\node[blk,right=of x] (t) {Mode-specific\\normalisation};
+\node[nn,right=of t] (e) {Encoder\\$128\to128$};
+\node[lat,right=of e] (h) {Code $\mathbf{h}$\\$\mu,\sigma\in\mathbb{R}^{128}$};
+\node[nn,right=of h] (d) {Decoder\\$128\to128$};
+\node[io,right=of d] (y) {Rebuilt day};
+\foreach \a/\b in {x/t,t/e,e/h,h/d,d/y} \draw[arr] (\a) -- (\b);
+\node[io,below=6mm of h] (n) {New day: $\mathbf{h}\sim\mathcal{N}(0,I)$};
+\draw[arr,dashed] (n) -| (d);
+\end{tikzpicture}
+\caption{TVAE architecture}
+\label{fig:arch-tvae}
+\end{figure}
+
+\subsection{CTGAN}
+The data are prepared as for TVAE. The generator takes 128-dimensional Gaussian noise concatenated with a conditional
+vector (the one-hot code of a chosen season) and passes it through two residual layers of 256 units (linear,
+BatchNorm, ReLU, output concatenated with the input); scalar outputs use $\tanh$ and mode and season indicators use
+Gumbel-softmax. The critic sees ten rows at once (\emph{PacGAN}, pac 10) through two layers of 256 units (LeakyReLU 0.2,
+dropout 0.5). Training uses the Wasserstein loss with gradient penalty~\cite{gulrajani2017wgangp},
+\begin{equation}
+  \mathcal{L}_{D}=\mathbb{E}[D(\tilde x)]-\mathbb{E}[D(x)]+\lambda\,\mathbb{E}\big[(\lVert\nabla_{\hat x}D(\hat x)\rVert_2-1)^2\big],
+  \qquad \lambda=10,
+\end{equation}
+plus a cross-entropy term that makes the generator respect the requested season. \emph{Training-by-sampling} draws
+the condition so that rare seasons are seen often enough (Figure~\ref{fig:arch-ctgan}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=5mm]
+\node[io] (z) {Noise (128)\\+ season};
+\node[nn,right=of z] (g) {Generator\\2 residual $\times$ 256};
+\node[lat,right=of g] (f) {Fake day};
+\node[nn,right=of f] (c) {Critic, pac 10\\$256\to256$};
+\node[io,right=of c] (s) {Score:\\real or fake};
+\node[io,below=6mm of c] (r) {Real extreme days};
+\foreach \a/\b in {z/g,g/f,f/c,c/s} \draw[arr] (\a) -- (\b);
+\draw[arr] (r) -- (c);
+\end{tikzpicture}
+\caption{CTGAN architecture}
+\label{fig:arch-ctgan}
+\end{figure}
+
+\subsection{Conditional diffusion model}
+Each of the 49 features is first mapped to a standard normal by a quantile transform. The forward process adds
+Gaussian noise over $T=1{,}000$ steps with a cosine schedule~\cite{nichol2021improved},
+$x_\tau=\sqrt{\bar\alpha_\tau}\,x_0+\sqrt{1-\bar\alpha_\tau}\,\epsilon$. The denoiser $\epsilon_\theta(x_\tau,\tau,c)$
+embeds the noisy row (linear, $49\to512$), the step $\tau$ (128 sinusoidal features, then $512$, SiLU, $512$) and the
+condition $c$ (season one-hot, severity $z$ and a presence flag; 6 values, then $512$, SiLU, $512$), adds the three
+embeddings and applies four pre-norm residual blocks $x\leftarrow x+W_2\,\mathrm{SiLU}(W_1\,\mathrm{LN}(x))$ with widths
+$512\to1024\to512$, followed by LayerNorm and a linear layer back to 49 values (Figure~\ref{fig:arch-ddpm}); it has
+about 4.85 million parameters. Training minimises $\lVert\epsilon-\epsilon_\theta(x_\tau,\tau,c)\rVert^2$ with the
+condition dropped (set to zero) 10\% of the time, AdamW (learning rate $10^{-3}$, weight decay $10^{-4}$, cosine decay),
+gradient clipping at 1, an exponential moving average of the weights (0.999), 15{,}000 steps and batches of 1{,}024.
+New days are made from pure noise in 50 deterministic DDIM steps~\cite{song2021ddim} with classifier-free
+guidance~\cite{ho2022cfg},
+\begin{equation}
+  \tilde\epsilon=(1+w)\,\epsilon_\theta(x_\tau,\tau,c)-w\,\epsilon_\theta(x_\tau,\tau,\varnothing),\qquad w=2,
+\end{equation}
+where $c$ holds the season and the EVT severity of Eq.~\ref{eq:cap}; the result is mapped back by the inverse quantile
+transform.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=4mm]
+\node[io] (x) {Noisy day $x_\tau$ (49)};
+\node[io,below=2mm of x] (t) {Step $\tau$: 128 sine features};
+\node[lat,below=2mm of t] (c) {Condition: season, $z$};
+\node[blk,right=8mm of t,minimum width=8mm] (p) {$+$};
+\node[nn,right=of p] (b) {4 residual blocks\\LN, $512\to1024\to512$, SiLU};
+\node[io,right=of b] (o) {Predicted\\noise (49)};
+\draw[arr] (x.east) -- node[above,font=\scriptsize]{512} (p);
+\draw[arr] (t) -- node[above,font=\scriptsize]{512} (p);
+\draw[arr] (c.east) -- node[below,font=\scriptsize]{512} (p);
+\draw[arr] (p) -- (b); \draw[arr] (b) -- (o);
+\end{tikzpicture}
+\caption{Conditional diffusion denoiser}
+\label{fig:arch-ddpm}
+\end{figure}
+
+\subsection{Severity judge for TVAE and CTGAN}
+TVAE and CTGAN cannot be asked for a severity, so a LightGBM regressor (the \emph{judge}), trained on the real extremes,
+predicts $z$ for each of the 296{,}040 pooled rows. Rows are grouped into 20 equal tail-position bins and drawn so that
+the bins and seasons match the EVT target (60\% of the mass in the top four bins), giving 88{,}812 rows per set.
+
 \section{Classifier and Evaluation}
 LightGBM~\cite{ke2017lightgbm} is identical for every method. Because 98\% of days are normal, accuracy is
 uninformative; we report PR-AUC (average precision) on all days, on \emph{onset} days (heatwave starts) and on
 \emph{severe} days (the 10\% most severe extremes), plus precision and recall. Each method is trained with five seeds;
 differences are tested by resampling whole test months. The baseline is \emph{persistence}: ``tomorrow will be like
 today''.
+
+\textbf{Neural-network comparison.} A multilayer perceptron (three hidden layers of 256 units, SiLU, dropout 0.1,
+sigmoid output; inputs standardised and clipped to $\pm10$; binary cross-entropy; AdamW, learning rate $10^{-3}$;
+6 epochs, 2 seeds) was tried in an early run on the same inputs. It scored about the same as LightGBM on real data
+(PR-AUC 0.597 vs 0.594) but needs a GPU and is slower; tree ensembles are also generally stronger on tabular
+data~\cite{grinsztajn2022tree}, so LightGBM was kept.
 
 % =============================================================================
 \chapter{Results and Discussion}
@@ -603,6 +825,44 @@ Persistence (no model) & 0.586 & 0.191 & 0.565 \\ \hline
         only), and beat persistence on overall skill (0.611 vs 0.586). The top EVT-tail methods are statistically close.
   \item \textbf{Interpolation helps little:} SMOTE gave a small gain; Borderline-SMOTE and ADASYN none.
 \end{itemize}
+
+\textbf{Effect of EVT tail focus.} Comparing each generator with its own plain version isolates the effect
+of EVT (Table~\ref{tab:evtgain}).
+
+\begin{table}[H]
+\centering
+\caption{Plain versus EVT tail focus, severe-day PR-AUC (mean of five runs, each scored on its own)}
+\label{tab:evtgain}
+\small
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{Generator} & \textbf{Plain} & \textbf{EVT tail} & \textbf{Gain} & \textbf{Runs better} & \textbf{Heatwave starts}\\ \hline
+Diffusion & 0.482 & 0.549 & +13.8\% & 5/5 & +1.9\% (4/5)\\ \hline
+TVAE & 0.514 & 0.583 & +13.6\% & 5/5 & +7.4\% (5/5)\\ \hline
+CTGAN & 0.554 & 0.581 & +4.9\% & 3/5 & +4.3\% (5/5)\\ \hline
+\multicolumn{6}{|l|}{Real data only: 0.411 (mean of five runs).}\\ \hline
+\end{tabular}
+\end{table}
+
+\textbf{Which use of EVT helps.} Because the diffusion model takes a severity, it was used to compare ways of choosing
+severities with everything else fixed (Table~\ref{tab:ablation}). Sampling the fitted GPD as it is gave no gain over
+real severities, since most of its mass is mild extremes; focusing on its upper 20\% did. Adding 8.7 synthetic days per
+real extreme instead of one lowered heatwave-start skill (0.222 to 0.197).
+
+\begin{table}[H]
+\centering
+\caption{Choice of severities for the diffusion model (severe-day PR-AUC, mean of five runs)}
+\label{tab:ablation}
+\small
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Severities requested} & \textbf{PR-AUC} & \textbf{Runs better than real severities}\\ \hline
+Real data only (no synthetic days) & 0.411 & --\\ \hline
+Copied from real extremes (plain) & 0.482 & --\\ \hline
+Fitted GPD as it is, $q\sim\mathcal{U}(0,1)$ & 0.462 & 1/5\\ \hline
+\rowcolor{rowhl}GPD with tail focus (Eq.~\ref{eq:mix}) & \textbf{0.549} & 5/5\\ \hline
+\end{tabular}
+\end{table}
 
 \textbf{Other generators tried.} Three further generators were run in the same way: a Gaussian
 copula~\cite{patki2016sdv}, CopulaGAN and a conditional WGAN-GP built in this project. EVT tail focus improved them
@@ -743,6 +1003,11 @@ generation methods under a fixed classifier; and open, reproducible code that ru
 \bibitem{kingma2014vae} D. P. Kingma and M. Welling, \reflink{https://arxiv.org/abs/1312.6114}{Auto-encoding variational Bayes}, International Conference on Learning Representations, 2014.
 \bibitem{patki2016sdv} N. Patki, R. Wedge and K. Veeramachaneni, \reflink{https://doi.org/10.1109/DSAA.2016.49}{The Synthetic Data Vault}, IEEE International Conference on Data Science and Advanced Analytics, 2016.
 \bibitem{ho2020ddpm} J. Ho, A. Jain and P. Abbeel, \reflink{https://arxiv.org/abs/2006.11239}{Denoising diffusion probabilistic models}, Advances in Neural Information Processing Systems, 2020.
+\bibitem{gulrajani2017wgangp} I. Gulrajani, F. Ahmed, M. Arjovsky, V. Dumoulin and A. Courville, \reflink{https://arxiv.org/abs/1704.00028}{Improved training of Wasserstein GANs}, Advances in Neural Information Processing Systems, 2017.
+\bibitem{nichol2021improved} A. Q. Nichol and P. Dhariwal, \reflink{https://arxiv.org/abs/2102.09672}{Improved denoising diffusion probabilistic models}, International Conference on Machine Learning, 2021.
+\bibitem{song2021ddim} J. Song, C. Meng and S. Ermon, \reflink{https://arxiv.org/abs/2010.02502}{Denoising diffusion implicit models}, International Conference on Learning Representations, 2021.
+\bibitem{ho2022cfg} J. Ho and T. Salimans, \reflink{https://arxiv.org/abs/2207.12598}{Classifier-free diffusion guidance}, NeurIPS Workshop on Deep Generative Models and Downstream Applications, 2021.
+\bibitem{grinsztajn2022tree} L. Grinsztajn, E. Oyallon and G. Varoquaux, \reflink{https://arxiv.org/abs/2207.08815}{Why do tree-based models still outperform deep learning on typical tabular data?}, Advances in Neural Information Processing Systems (Datasets and Benchmarks), 2022.
 \bibitem{kotelnikov2023tabddpm} A. Kotelnikov, D. Baranchuk, I. Rubachev and A. Babenko, \reflink{https://arxiv.org/abs/2209.15421}{TabDDPM: Modelling tabular data with diffusion models}, International Conference on Machine Learning, 2023.
 \bibitem{dsouza2025overlap} A. D'souza, Swetha M and S. Sarawagi, \reflink{https://arxiv.org/abs/2412.15657}{Synthetic tabular data generation for imbalanced classification: The surprising effectiveness of an overlap class}, AAAI Conference on Artificial Intelligence, 2025.
 \bibitem{bhatia2021exgan} S. Bhatia, A. Jain and B. Hooi, \reflink{https://arxiv.org/abs/2009.08454}{ExGAN: Adversarial generation of extreme samples}, AAAI Conference on Artificial Intelligence, 2021.
