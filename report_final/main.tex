@@ -1176,10 +1176,12 @@ predicts $z$ for each of the 296{,}040 pooled rows. Rows are grouped into 20 equ
 the bins and seasons match the EVT target (60\% of the mass in the top four bins), giving 88{,}812 rows per set.
 
 \section{Classifier and Evaluation}
+\label{sec:metricsdef}
 LightGBM~\cite{ke2017lightgbm} is identical for every method. Because 98\% of days are normal, accuracy is
 uninformative; we report PR-AUC (average precision) on all days, on \emph{onset} days (heatwave starts) and on
 \emph{severe} days (the 10\% most severe extremes), plus precision and recall. Table~\ref{tab:metrics} defines every
-measure. In it, a \emph{hit} is an extreme day that received a warning, a \emph{miss} an extreme day without one, and a
+measure; Section~\ref{sec:allmetrics} compares the methods on all of them and explains why PR-AUC is the main
+measure. In Table~\ref{tab:metrics}, a \emph{hit} is an extreme day that received a warning, a \emph{miss} an extreme day without one, and a
 \emph{false alarm} a normal day that received one.
 
 \begin{table}[H]
@@ -1344,6 +1346,101 @@ Conditional WGAN-GP & 0.509 & 0.532 & +0.023 & 4/5 \\ \hline
 apart from real ones---helped as much or more (Figure~\ref{fig:realism}). Where the extra days sit in the tail mattered
 more than how real they looked.
 
+% =============================================================================
+\section{All Evaluation Measures and the Choice of PR-AUC}
+\label{sec:allmetrics}
+Table~\ref{tab:allmetrics} scores the main methods on every common measure, so that the choice of the main measure
+rests on evidence. The first group of columns needs a single warning cut-off (chosen on 2011--2015, as in
+Section~\ref{sec:metricsdef}); the last three columns do not. A trivial forecast that never warns is added as a
+reference.
+
+\begin{table}[H]
+\centering
+\caption{All evaluation measures on the test years 2016--2025 (1{,}932{,}437 rows, 37{,}450 extreme). Combined model of
+five seeds. Best trained method in each column in bold. Accuracy, F1, false-alarm rate, HSS and balanced accuracy are
+computed from the stored precision and recall and the known numbers of extreme and normal rows.}
+\label{tab:allmetrics}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{|l|c|c|c|c|c|c|c|c||c|c|c|}
+\hline
+ & \multicolumn{8}{c||}{\textbf{At one warning cut-off}} & \multicolumn{3}{c|}{\textbf{All cut-offs (PR-AUC)}}\\ \hline
+\textbf{Method} & \textbf{Acc.} & \textbf{Prec.} & \textbf{Recall} & \textbf{F1} & \textbf{CSI} & \textbf{FAR} & \textbf{HSS} & \textbf{Bal.\ acc.} & \textbf{All} & \textbf{Onset} & \textbf{Severe}\\ \hline
+Never warn (trivial) & 98.06\% & -- & 0 & 0 & 0 & 0\% & 0 & 0.500 & 0.019 & -- & 0.002\\ \hline
+Persistence (no model) & 98.29\% & 0.553 & \textbf{0.602} & 0.576 & 0.405 & 0.96\% & 0.568 & \textbf{0.796} & 0.586 & 0.191 & 0.565\\ \hline
+Real data only & \textbf{98.51\%} & \textbf{0.654} & 0.495 & 0.563 & 0.392 & \textbf{0.52\%} & 0.556 & 0.745 & 0.599 & 0.235 & 0.441\\ \hline
+SMOTE & 98.37\% & 0.576 & 0.594 & \textbf{0.585} & \textbf{0.413} & 0.86\% & \textbf{0.577} & 0.793 & 0.604 & 0.231 & 0.507\\ \hline
+EVT-tail copies of real extremes & 98.49\% & 0.629 & 0.542 & 0.582 & 0.411 & 0.63\% & 0.575 & 0.768 & \textbf{0.613} & \textbf{0.239} & 0.530\\ \hline
+Diffusion + EVT tail & 98.46\% & 0.618 & 0.541 & 0.577 & 0.405 & 0.66\% & 0.569 & 0.767 & 0.609 & 0.228 & 0.579\\ \hline
+TVAE + EVT tail & 98.48\% & 0.634 & 0.511 & 0.566 & 0.394 & 0.58\% & 0.558 & 0.753 & 0.610 & 0.220 & \textbf{0.601}\\ \hline
+CTGAN + EVT tail & 98.42\% & 0.600 & 0.550 & 0.574 & 0.403 & 0.72\% & 0.566 & 0.771 & 0.611 & 0.223 & \textbf{0.601}\\ \hline
+\end{tabular}
+\end{table}
+
+\noindent Abbreviations: Acc.\ = accuracy; Prec.\ = precision; FAR = false-alarm rate (false alarms / normal days);
+HSS = Heidke skill score (accuracy above that of chance, 0 = no skill, 1 = perfect); Bal.\ acc.\ = balanced accuracy
+(mean of recall and $1-\mathrm{FAR}$). The ``--'' for onset under \emph{never warn} is because that subset's share of
+extremes was not stored; for any no-skill forecast PR-AUC equals the share of extremes in the subset.
+
+\subsection{What the table shows}
+\begin{enumerate}
+\item \textbf{The measures do not agree on the best method.} Accuracy, precision and false-alarm rate pick
+\emph{real data only}; recall and balanced accuracy pick \emph{persistence}; F1, CSI and HSS pick \emph{SMOTE}; PR-AUC
+picks EVT-tail copies (all days and onsets) and TVAE/CTGAN + EVT tail (severe days). A single main measure therefore has
+to be chosen for a stated reason, before looking at the results.
+\item \textbf{Accuracy cannot separate the methods.} Never warning already scores 98.06\%. All trained methods lie
+between 98.37\% and 98.51\%, and the highest value goes to the most cautious model, the one that misses half of the
+extreme days.
+\item \textbf{Precision, recall and false-alarm rate trade against each other.} Real data only has the best precision
+(0.654) and the fewest false alarms (0.52\%) because it warns least, and so it has the lowest recall (0.495).
+Persistence is the reverse. Moving the cut-off moves a method along this trade-off, so one of these numbers alone says
+little about how good the model is.
+\item \textbf{F1, CSI and HSS depend on one cut-off chosen in other years.} The cut-off is fixed on 2011--2015, when
+1.00\% of rows were extreme; in 2016--2025 the share is 1.94\%. All trained methods lie within 0.02 of each other
+(F1 0.563--0.585, CSI 0.392--0.413). These
+measures are reported, but a method should not be judged on them alone.
+\item \textbf{Balanced accuracy and ROC-type measures are flattered by the many normal days.} Their false-alarm term
+divides by 1.89 million normal days, so the false-alarm rate is below 1\% for every method. Doubling the false alarms
+(0.52\% for real data only to 0.96\% for persistence) moves a model by less than 0.005 along the horizontal axis of a
+ROC curve, while precision falls from 0.654 to 0.553. Persistence, which has no model, has the best balanced
+accuracy.
+\item \textbf{Only PR-AUC on severe days shows the purpose of the project.} The most severe extremes are 10\% of all
+extreme days, so they barely move all-day measures. On them, PR-AUC rises from 0.441 (real data only) to 0.601
+(TVAE/CTGAN + EVT tail), the largest difference of any measure in the table, while all-days PR-AUC does not fall
+(0.599 to 0.611).
+\end{enumerate}
+
+\subsection{Why PR-AUC was chosen}
+\begin{table}[H]
+\centering
+\caption{What each measure rewards, its problem in this task, and how it is used in this report}
+\label{tab:metricchoice}
+\footnotesize
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{2.5cm}|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}p{4.4cm}|>{\raggedright\arraybackslash}p{2.3cm}|}
+\hline
+\textbf{Measure} & \textbf{Problem in this task (evidence in Table~\ref{tab:allmetrics})} & \textbf{What it is still good for} & \textbf{Use here}\\ \hline
+Accuracy & Dominated by the 98\% normal days; never warning scores 98.06\% & Nothing for rare events & Not used\\ \hline
+Precision / recall / FAR alone & Each can be made high by moving the cut-off; they rank methods in opposite orders & Explaining a chosen operating point to users & Reported at the chosen cut-off\\ \hline
+F1, CSI, HSS & Depend on one cut-off fixed in cooler years; trained methods differ by $\le 0.02$ & Standard skill scores of weather services & Reported as supporting evidence\\ \hline
+Balanced accuracy, ROC-AUC & Count correct quiet days; false alarms look tiny next to 1.89 million normal days; persistence looks best & Problems where both classes are equally important & Not used\\ \hline
+\textbf{PR-AUC} (all, onset, severe) & Needs a fixed subset definition to compare (done before the experiments) & Threshold-free; looks only at how well extremes are ranked above normal days; random level equals the share of extremes, so it shows real skill & \textbf{Main measure}\\ \hline
+\end{tabularx}
+\end{table}
+
+\begin{enumerate}
+\item \textbf{It does not depend on a cut-off.} It averages precision over every possible warning level, so a method
+is not rewarded or punished for where one cut-off happened to fall.
+\item \textbf{It ignores correct quiet days.} Precision and recall contain no true-negative term, so the 1.89 million
+normal days cannot hide errors on the 37{,}450 extreme ones.
+\item \textbf{Its no-skill level is known and low.} A random forecast scores the share of extremes (0.019 on all
+days, 0.002 on severe days), so 0.60 is clearly far above chance.
+\item \textbf{It can be computed on any subset.} The same measure on onset and severe days answers the two questions of
+the project: can the model see heat coming, and can it rank the worst days first.
+\item \textbf{It is the recommended measure for rare events.} Saito and Rehmsmeier~\cite{saito2015pr} showed that PR
+curves describe performance on imbalanced data more faithfully than ROC curves, and Davis and
+Goadrich~\cite{davis2006pr} showed that a method can dominate in ROC space without being better in PR space.
+\end{enumerate}
+
 \section{Control Experiment: Is a Generator Needed?}
 \begin{figure}[H]
 \centering
@@ -1479,6 +1576,8 @@ generation methods under a fixed classifier; and open, reproducible code that ru
 \bibitem{imd2026monsoon} India Meteorological Department, \reflink{https://mausam.imd.gov.in/Forecast/marquee_data/Salient_Features_SW_MONSOON\%20_2026_30_sep.pdf}{Salient features of the 2026 southwest monsoon season}, 30 September 2026.
 \bibitem{imdheatdef} India Meteorological Department, \reflink{https://mausam.imd.gov.in/pdfs/heatcolduser/Definition.pdf}{Heat wave and warm night: definitions and criteria}.
 \bibitem{naturalearth} Natural Earth, \reflink{https://www.naturalearthdata.com}{Free vector map data at 1:10m scale} (admin-0, India point of view; admin-1 states).
+\bibitem{saito2015pr} T. Saito and M. Rehmsmeier, \reflink{https://doi.org/10.1371/journal.pone.0118432}{The precision-recall plot is more informative than the ROC plot when evaluating binary classifiers on imbalanced datasets}, PLOS ONE 10(3): e0118432, 2015.
+\bibitem{davis2006pr} J. Davis and M. Goadrich, \reflink{https://doi.org/10.1145/1143844.1143874}{The relationship between precision-recall and ROC curves}, Proceedings of the 23rd International Conference on Machine Learning (ICML), 2006.
 \end{thebibliography}}
 
 \end{document}
