@@ -1,0 +1,58 @@
+% =========================================================================
+\chapter{The project in one page}
+\label{ch:overview}
+% =========================================================================
+
+\section*{The question}
+Can a computer warn, one day ahead, that tomorrow will be an \emph{extreme heat day} at a given place in Himachal
+Pradesh? And because such days are rare, does it help to \emph{make extra examples} of them with generative models,
+guided by extreme value theory?
+
+\section*{The story in six steps}
+\begin{enumerate}
+  \item \textbf{Data.} Daily weather for 45 years (1981--2025) on a grid of 529 small squares (cells) covering the
+        state, from a data set called ERA5-Land, plus the height and slope of each cell from a terrain map called SRTM.
+  \item \textbf{Extreme day.} For each cell and season, the hottest 1\% of days in 1981--2010 sets a threshold. A day
+        hotter than that threshold is an extreme heat day.
+  \item \textbf{Rows.} Each cell on each day becomes one row of 57 numbers describing what is known today. The answer
+        (label) is: is \emph{tomorrow} extreme, yes (1) or no (0)?
+  \item \textbf{The difficulty.} Only about 1 row in 100 has the answer ``yes''. A model trained on such data sees
+        very few extreme days, and the most severe ones are rarer still.
+  \item \textbf{The idea.} Use three generative models (TVAE, CTGAN, a diffusion model) to create extra extreme rows,
+        and use extreme value theory (EVT) to decide how severe those extra days should be: mostly the rarest,
+        hottest kind, but never hotter than physically possible.
+  \item \textbf{The test.} Train the same classifier (LightGBM) with and without the extra rows, and score it on years
+        it never saw (2016--2025).
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=4mm]
+\node[bdat,text width=2.5cm] (d) {ERA5-Land weather\\+ SRTM terrain\\529 cells, 45 years};
+\node[blue box,text width=2.5cm,right=of d] (l) {Threshold = top 1\%\\label: is tomorrow\\extreme? (1/0)};
+\node[blue box,text width=2.5cm,right=of l] (r) {Rows of\\57 predictors\\(one per cell-day)};
+\node[orange box,text width=2.5cm,right=of r] (g) {Generators make\\extra extreme rows,\\EVT sets severity};
+\node[green box,text width=4.0cm,below=9mm of l] (c) {LightGBM trained on 1981--2010\\with / without extra rows};
+\node[green box,text width=4.0cm,right=8mm of c] (t) {Scored on 2016--2025:\\how well are the\\extreme days found?};
+\draw[ar] (d) -- (l); \draw[ar] (l) -- (r); \draw[ar] (r) -- (g);
+\draw[ar] (g.south) |- ++(0,-0.45) -| (c.north);
+\draw[ar] (c) -- (t);
+\end{tikzpicture}
+\caption{The whole project in one picture.}
+\end{figure}
+
+\section*{The answer}
+\begin{itemize}
+  \item With real data only, the classifier scores \textbf{0.441} on the most severe days (PR-AUC, explained in
+        Chapter~\ref{ch:metrics}; 1 is perfect).
+  \item Adding extreme days from TVAE or CTGAN raises this to \textbf{0.601 (+36\%)}; from the diffusion model to
+        \textbf{0.579 (+31\%)}.
+  \item EVT is the reason it works: putting most added days in the rarest part of the tail improved every generator
+        (by up to 14\%), while adding days without that focus helped much less.
+\end{itemize}
+
+\begin{sayit}
+``Extreme heat days are 1\% of the data, so a model rarely sees them. I used generative models to create more of them,
+and extreme value theory to make most of the new days the rare, severe kind, within physical limits. On years the
+model never saw, this made its warnings for the most dangerous days 31 to 36\% better.''
+\end{sayit}

@@ -1,0 +1,51 @@
+% =========================================================================
+\chapter{Likely questions and short answers}
+\label{ch:questions}
+% =========================================================================
+
+\newcommand{\qa}[2]{\par\medskip\noindent\textbf{Q. #1}\par\noindent #2\par}
+
+\qa{What is extreme value theory?}{The branch of statistics for the largest values. Its key result
+(Pickands--Balkema--de Haan) says the excesses above a high threshold follow a generalised Pareto distribution
+(GPD), whatever the original distribution.}
+
+\qa{What does $\xi$ tell you?}{The shape of the tail. Negative (as here, about $-0.15$): the tail has an upper limit,
+which is physical for temperature. Zero: exponential tail. Positive: heavy tail with no limit.}
+
+\qa{Why not just oversample (SMOTE or copies)?}{Copies add no new information, and SMOTE only draws between existing
+points, so neither reaches beyond the hottest day seen. The control shows random copies give 0.464 against 0.58--0.60
+with EVT-guided generated days.}
+
+\qa{How do you know the generated days are realistic?}{Every row is cleaned to obey physical rules and placed on a real
+cell; the 8 gap columns are recomputed; and the test is done only on real days from 2016--2025, which the generators
+never saw.}
+
+\qa{Why the 99th percentile?}{It gives about 1\% extremes per cell and season, rare enough to be ``extreme'' but with
+enough cases (29,604 in training) to learn from. It is computed separately per cell and season, so a hot day in Kinnaur
+and in Una are judged on their own scales.}
+
+\qa{Why 1981--2010 for thresholds?}{It is a standard 30-year WMO climate normal period, and it keeps the thresholds
+fixed before the validation and test years.}
+
+\qa{Why was the test set not split randomly?}{Days close in time are similar; a random split would leak information.
+Validation and test are later, separate years.}
+
+\qa{Is there leakage from tomorrow?}{No. All predictors use today and earlier; only the label looks at tomorrow.}
+
+\qa{Why LightGBM?}{Best known model type for tables, fast on CPU, allows the physics (monotone) constraint. An MLP
+scored the same on real data. One fixed classifier means differences come from the data.}
+
+\qa{Why does CTGAN gain less from EVT?}{Without EVT it already produced many hot-tail days (plain score 0.554, the
+highest), so there was less to fix.}
+
+\qa{What is the 60\%?}{Tail positions are drawn half from the whole tail and half from its top fifth, so
+$0.5\times0.2+0.5\times1=0.6$: 60\% of added days fall in the top 20\% of the tail.}
+
+\qa{Why cap the severity?}{With $\xi<0$ the GPD has an end point $\sigma/|\xi|$; going past it is impossible. The cap
+also stops anything above 1.5 times the hottest real excess.}
+
+\qa{Why 529 cells?}{The ERA5-Land grid (0.1$^\circ$) over the box around Himachal Pradesh has $31\times37=1{,}147$
+cells; 529 have their centre inside the state boundary.}
+
+\qa{What would you do next?}{Longer lead times; let the GPD vary by cell or with elevation; check synthetic days with a
+meteorologist; try the method in another region.}

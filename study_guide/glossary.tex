@@ -1,0 +1,48 @@
+% =========================================================================
+\chapter*{Glossary}
+\addcontentsline{toc}{chapter}{Glossary}
+% =========================================================================
+\begin{description}[style=nextline,leftmargin=0pt,itemsep=3pt,font=\bfseries]
+\footnotesize
+\item[Anomaly] Today's value minus the normal value for that calendar day (1981--2010 mean over $\pm7$ days).
+\item[Average precision (AP)] The way PR-AUC is computed: mean precision at each correctly found extreme.
+\item[Batch / epoch] Rows used per training update / one full pass over the training data.
+\item[Bootstrap] Refitting many times on resampled data (here, whole days, 100 times) to get a range of uncertainty.
+\item[Cell] One 0.1$^\circ$ ERA5-Land grid square, about $9.4\times11.1$\,km. 529 cover Himachal Pradesh.
+\item[Class imbalance] One class (normal days) far outnumbers the other (extreme days, about 1--2\%).
+\item[Classifier-free guidance] Mixing the diffusion model's guesses with and without the condition to follow it more strongly ($w=2$).
+\item[Climate normal] A 30-year reference period; here 1981--2010.
+\item[Conditional] A generator that can be told what to produce (season; for DDPM also severity).
+\item[CTGAN] Conditional tabular GAN: generator and critic competing.
+\item[DDIM] A faster way to run the diffusion reverse process (50 steps instead of 1,000).
+\item[DDPM] Denoising diffusion probabilistic model: learns to remove noise step by step.
+\item[DEM] Digital elevation model: a map of ground height (here SRTM).
+\item[Early stopping] Stop adding trees when the validation score has not improved for 60 rounds.
+\item[Ensemble] The average of the 5 seeds' predicted probabilities.
+\item[ERA5-Land] ECMWF's land reanalysis: hourly/daily weather on a 0.1$^\circ$ grid since 1950.
+\item[EVT] Extreme value theory: statistics of the largest values.
+\item[Extreme day] A day whose maximum temperature is above that cell's 99th percentile for the season.
+\item[F1] Balance of precision and recall; used to pick the warning cut-off on the validation years.
+\item[GADM] Database of administrative boundaries; gives the state outline.
+\item[GAN] Generative adversarial network: generator vs critic.
+\item[GPD] Generalised Pareto distribution, the law of excesses over a high threshold; parameters $\xi$ (shape), $\sigma$ (scale).
+\item[LightGBM] A fast gradient-boosted decision-tree library; the fixed classifier.
+\item[Monotone constraint] A rule that the prediction can only rise as a predictor rises (here, closer to the threshold).
+\item[MLE] Maximum likelihood estimation: choose parameters that make the observed data most likely.
+\item[Onset] A day that becomes extreme tomorrow while today is still below tomorrow's threshold.
+\item[Percentile] The value below which a given share of data lies (99th: 99\% below).
+\item[PR-AUC] Area under the precision--recall curve; random = share of extremes.
+\item[Precision / recall] Share of warnings that were right / share of extremes that were warned.
+\item[Predictor (feature)] One input number of a row; there are 57.
+\item[Reanalysis] Weather model + all observations combined to give a complete past record.
+\item[Seed] The starting number for random choices; 5 seeds = 5 independent training runs.
+\item[Severe subset] All normal days plus the 10\% most severe extremes.
+\item[SMOTE] Oversampling by drawing new points between existing minority points.
+\item[SRTM] Shuttle Radar Topography Mission; 30\,m elevation data.
+\item[Standardised excess $z$] $(T_{\max}-u)/s$: how far above the threshold, in units of that cell's typical day-to-day spread.
+\item[Tail position $q$] Where $z$ sits in the fitted GPD, from 0 (just above the threshold) to 1 (most extreme).
+\item[Threshold $u$] The 99th percentile per cell and season; 2,116 in all.
+\item[TVAE] Tabular variational autoencoder: encoder, code, decoder.
+\item[Validation / test] Years for tuning (2011--15) / years for the final honest score (2016--25).
+\item[$\xi$ (xi)] GPD shape: negative means a bounded tail.
+\end{description}

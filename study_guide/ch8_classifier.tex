@@ -1,0 +1,69 @@
+% =========================================================================
+\chapter{The classifier: LightGBM}
+\label{ch:clf}
+% =========================================================================
+
+\section{Decision trees}
+A \textbf{decision tree} asks a chain of yes/no questions about the predictors (``is the gap to the threshold smaller
+than 1\,$^\circ$C?'', ``has it been dry for 30 days?'') and ends in a \textbf{leaf} that holds an answer. One tree is
+simple but weak.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[level distance=13mm,
+  level 1/.style={sibling distance=48mm},level 2/.style={sibling distance=24mm},
+  q/.style={bx,fill=blue!8,draw=blue!55!black,text width=3.0cm},
+  lf/.style={bx,fill=orange!12,draw=orange!70!black,text width=1.8cm}]
+\node[q] {gap to tomorrow's threshold $<1\,^\circ$C?}
+  child {node[q] {rain in last 30 days $<20$\,mm?}
+     child {node[lf] {high risk}} child {node[lf] {medium}}
+     edge from parent node[left,font=\scriptsize] {yes}}
+  child {node[lf] {low risk} edge from parent node[right,font=\scriptsize] {no}};
+\end{tikzpicture}
+\caption{A toy decision tree (illustrative questions, not the learned ones).}
+\end{figure}
+
+\section{Gradient boosting and LightGBM}
+\textbf{Gradient boosting} builds many small trees one after another; each new tree corrects the mistakes the previous
+trees still make. The prediction is the sum of all trees, turned into a probability. \textbf{LightGBM} (Ke et al.,
+NeurIPS 2017) is a fast implementation of this.
+
+\begin{center}
+\footnotesize
+\begin{tabular}{p{4.5cm}p{9.2cm}}
+\toprule
+\textbf{Setting} & \textbf{Meaning}\\
+\midrule
+learning rate 0.05 & each new tree adds only 5\% of its correction, so learning is careful\\
+31 leaves per tree & how detailed one tree can be\\
+at least 200 rows per leaf & stops trees from memorising tiny groups\\
+80\% of rows and of columns per tree & each tree sees a random part of the data, which reduces overfitting\\
+up to 1{,}000 trees, early stopping 60 & training stops when 60 new trees in a row do not improve the validation score\\
+monotone constraint & a smaller gap to the threshold (predictors \texttt{dist\_l0} and \texttt{dist\_std\_l0}) can never lower the
+  predicted risk: a physics rule built into the model\\
+5 seeds & trained 5 times with different random choices; results are the mean, or the 5 predictions averaged\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Why LightGBM and not a neural network}
+\begin{itemize}
+  \item On table data, tree models are usually stronger than neural networks (Grinsztajn et al., NeurIPS 2022).
+  \item It trains on 2.9 million rows on a normal CPU, without a GPU.
+  \item It allows the monotone (physics) constraint, and shows which predictors matter most.
+  \item A neural network (multilayer perceptron, three layers of 256) was tried in an early run: about the same score
+        on real data (0.597 vs 0.594), but slower and needing a GPU.
+  \item Keeping \textbf{one fixed classifier} means any difference in the results comes from the added data, not from
+        the model.
+\end{itemize}
+
+\section{From probability to warning}
+LightGBM outputs a probability for each row. A \textbf{warning cut-off} turns it into yes/no: warn if the probability
+is above the cut-off. The cut-off is chosen on the validation years as the one with the best F1 score
+(Chapter~\ref{ch:metrics}), never on the test years.
+
+\begin{sayit}
+``LightGBM builds many small decision trees, each correcting the previous ones. It is strong on tables, fast on a CPU,
+and lets me add a physics rule: closer to the threshold never means lower risk. Keeping it fixed means differences in
+results come from the data I add.''
+\end{sayit}

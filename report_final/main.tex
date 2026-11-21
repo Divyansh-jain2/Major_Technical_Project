@@ -15,10 +15,10 @@
 \newcommand{\ReportTitle}{Extreme Value-Guided Deep Generative Models for Imbalanced Classification}
 \newcommand{\ReportSubtitle}{Case study: Next-day extreme heat prediction in Himachal Pradesh}
 \newcommand{\StudentName}{Divyansh Jain}
-\newcommand{\RollNo}{B21XXX}                                   % TODO: your roll number
-\newcommand{\SupervisorName}{Dr. Supervisor Name}               % TODO: your supervisor
+\newcommand{\RollNo}{B23397}
+\newcommand{\SupervisorName}{Dr. Rishikesh Yadav}
 \newcommand{\SupervisorTitle}{Mentor}
-\newcommand{\SchoolName}{School of XXXXX}                       % TODO: your school
+\newcommand{\SchoolName}{School of Mathematical and Statistical Sciences}
 \newcommand{\CourseCode}{XX-499P}                               % TODO: course code
 \newcommand{\ReportKind}{Final Report}
 \newcommand{\ReportMonth}{November 2026}
@@ -31,7 +31,7 @@
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{float}
-\usepackage{array,tabularx,multirow,makecell}
+\usepackage{array,tabularx,multirow,makecell,longtable,booktabs}
 \usepackage[table]{xcolor}
 \usepackage{caption}
 \usepackage{enumitem}
@@ -40,7 +40,7 @@
 \usepackage{fancyhdr}
 \usepackage{setspace}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,fit,calc}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,decorations.pathreplacing}
 \tikzset{blk/.style={draw=black!55,rounded corners=2pt,align=center,font=\footnotesize,inner sep=4pt,minimum height=1.05cm},
          nn/.style={blk,fill=orange!12,draw=orange!70!black},
          lat/.style={blk,fill=blue!8,draw=blue!60!black},
@@ -248,8 +248,8 @@ WGAN-GP & Wasserstein GAN with Gradient Penalty \\ \hline
 % =============================================================================
 \section{Brief Introduction}
 Unusually hot days in Himachal Pradesh damage crops and orchards, speed up snow and glacier melt, raise forest-fire
-risk and threaten health. This project builds a model that predicts, for every 10\,km grid cell of the state, whether
-\emph{tomorrow} will be an extreme heat day, and studies how to train such a model when extreme days are rare. It
+risk and threaten health. This project builds a model that predicts, for each of 529 grid cells of about
+$9\times11$\,km covering the state, whether \emph{tomorrow} will be an extreme heat day, and studies how to train such a model when extreme days are rare. It
 combines \textbf{Extreme Value Theory (EVT)}, the statistics of rare extremes, with \textbf{generative models} that
 create extra training examples.
 
@@ -276,12 +276,86 @@ as frequent as in 1981--2010.
         validation period, five training seeds.
 \end{enumerate}
 
+Figure~\ref{fig:pipeline} shows the four stages of the study, and Table~\ref{tab:numbers} explains every number
+that appears in it.
+
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{fig_pipeline.png}
-\caption{Overview of the project pipeline}
+\begin{tikzpicture}[
+  st/.style={draw=black!55,rounded corners=2pt,align=center,font=\scriptsize,text width=2.62cm,minimum height=1.85cm,inner sep=3pt},
+  dat/.style={st,fill=black!4},
+  lab/.style={st,fill=blue!7,draw=blue!55!black},
+  gen/.style={st,fill=orange!12,draw=orange!70!black},
+  evt/.style={st,fill=red!8,draw=red!60!black},
+  clf/.style={st,fill=green!8,draw=green!45!black},
+  hd/.style={font=\small\bfseries,anchor=west},
+  ar/.style={-{Stealth[length=2mm]},thick,draw=black!65}]
+% (a) data
+\node[hd] at (-1.36,1.3) {(a) Data};
+\node[dat] (a1) at (0,0) {\textbf{ERA5-Land}\\weather reanalysis,\\daily, 1981--2025,\\6 variables$^{[1]}$};
+\node[dat] (a2) at (3.25,0) {\textbf{SRTM}\\satellite terrain map:\\height and slope$^{[2]}$};
+\node[dat] (a3) at (6.5,0) {\textbf{Himachal grid}\\529 cells of 0.1$^\circ$\\(about $9\times11$\,km),\\16{,}436 days};
+\draw[ar] (a1) -- (a2); \draw[ar] (a2) -- (a3);
+% (b) labels and predictors
+\node[hd] at (-1.36,-1.55) {(b) Labels and predictors};
+\node[lab] (b1) at (0,-2.85) {\textbf{Threshold $u$}\\99th percentile of\\daily max.\ temp.,\\per cell and season,\\1981--2010};
+\node[lab] (b2) at (3.25,-2.85) {\textbf{Label}\\is tomorrow's max.\\temperature above $u$?\\yes = 1, no = 0};
+\node[lab] (b3) at (6.5,-2.85) {\textbf{57 predictors}\\what is known today\\about the cell\\(Table~\ref{tab:predictors})};
+\node[lab] (b4) at (9.75,-2.85) {\textbf{Rows}\\one row = one cell\\on one day; split\\into train, validation,\\test by year};
+\draw[ar] (b1) -- (b2); \draw[ar] (b2) -- (b3); \draw[ar] (b3) -- (b4);
+% (c) extra extremes
+\node[hd] at (-1.36,-4.4) {(c) Extra extreme days (Chapter~\ref{ch:method})};
+\node[gen] (c1) at (0,-5.7) {\textbf{Real extremes}\\29{,}604 extreme rows\\of the training years};
+\node[gen] (c2) at (3.25,-5.7) {\textbf{Generator}\\TVAE, CTGAN or\\conditional diffusion\\learns these rows};
+\node[evt] (c3) at (6.5,-5.7) {\textbf{EVT tail focus}\\GPD fit of severity;\\60\% of new days from\\the rarest 20\%};
+\node[gen] (c4) at (9.75,-5.7) {\textbf{Physics clean-up}\\placed on a real cell;\\impossible values\\repaired};
+\node[gen] (c5) at (13.0,-5.7) {\textbf{Synthetic extremes}\\29{,}604 new rows\\(one per real\\extreme)};
+\draw[ar] (c1) -- (c2); \draw[ar] (c2) -- (c3); \draw[ar] (c3) -- (c4); \draw[ar] (c4) -- (c5);
+% (d) prediction and testing
+\node[hd] at (-1.36,-7.25) {(d) Prediction and testing};
+\node[clf] (d1) at (0,-8.55) {\textbf{LightGBM}\\trained on real +\\synthetic rows\\(1981--2010), 5 runs};
+\node[clf] (d2) at (3.25,-8.55) {\textbf{Validation}\\2011--2015: when to\\stop training, where to\\set the warning cut-off};
+\node[clf] (d3) at (6.5,-8.55) {\textbf{Test}\\2016--2025, used once:\\PR-AUC, precision,\\recall (Table~\ref{tab:metrics})};
+\node[clf] (d4) at (9.75,-8.55) {\textbf{Comparison}\\real data only vs.\\each generator,\\without / with EVT};
+\draw[ar] (d1) -- (d2); \draw[ar] (d2) -- (d3); \draw[ar] (d3) -- (d4);
+\end{tikzpicture}
+\caption{Overview of the study. (a) Data sources and grid; (b) how labels and predictors are built; (c) how extra
+extreme days are made; (d) how the classifier is trained and tested. [1] daily maximum, minimum and mean temperature,
+dewpoint, surface pressure, solar radiation, top-layer soil water and rain (Table~\ref{tab:vars}); [2] NASA Shuttle
+Radar Topography Mission, 30\,m elevation data averaged over each grid cell.}
 \label{fig:pipeline}
 \end{figure}
+
+\begin{table}[H]
+\centering
+\caption{The numbers used throughout this report and what they mean}
+\label{tab:numbers}
+\footnotesize
+\begin{tabularx}{\textwidth}{|>{\raggedleft\arraybackslash}p{1.75cm}|X|>{\raggedright\arraybackslash}p{4.3cm}|}
+\hline
+\textbf{Number} & \textbf{Meaning} & \textbf{How it is obtained}\\ \hline
+529 & Grid cells covering Himachal Pradesh, each $0.1^\circ\times0.1^\circ$ (about $9.4\times11.1$\,km) & Cells of the
+  $31\times37=1{,}147$-cell download box whose centre lies inside the state boundary \\ \hline
+16{,}436 & Days in the record, 1 January 1981 to 31 December 2025 & 45 years of daily data \\ \hline
+4 & Seasons: winter (Dec--Feb), pre-monsoon (Mar--May), monsoon (Jun--Sep), post-monsoon (Oct--Nov) & India
+  Meteorological Department convention \\ \hline
+99th percentile & Threshold $u$ above which a day is an extreme heat day & Computed per cell and per season from
+  1981--2010 only \\ \hline
+2{,}116 & Number of thresholds & $529\text{ cells}\times4\text{ seasons}$ \\ \hline
+57 & Predictors describing a cell on one day & Listed one by one in Table~\ref{tab:predictors} \\ \hline
+2{,}889{,}927 & Training rows (cell-days) & A random half of all cell-days of 1981--2010 \\ \hline
+29{,}604 & Extreme rows among the training rows (1.02\%) & Rows whose label is 1 \\ \hline
+965{,}954 & Validation rows, 2011--2015 & All cell-days of those years \\ \hline
+1{,}932{,}437 & Test rows, 2016--2025, of which 37{,}450 extreme (1.94\%) & All cell-days of those years \\ \hline
+296{,}040 & Rows generated by TVAE or CTGAN before selection & $10\times29{,}604$ \\ \hline
+88{,}812 & Rows kept per generator after clean-up and EVT selection & $3\times29{,}604$ \\ \hline
+29{,}604 & Synthetic rows added to one training run & One per real extreme row, drawn from the 88{,}812 \\ \hline
+60\% / 20\% & EVT tail focus: 60\% of the added days lie in the most severe 20\% of the tail & Section~\ref{sec:evtmodel},
+  Eq.~\ref{eq:mix} \\ \hline
+5 & Training runs (seeds) per method; results are their mean or their combined prediction & Removes the luck of a
+  single run \\ \hline
+\end{tabularx}
+\end{table}
 
 \section{Problem Statement}
 \textbf{Extreme Value-Guided Deep Generative Models for Imbalanced Classification:} (1) treat the minority class as a
@@ -381,23 +455,60 @@ downstream classifier, or compare generator families under one fixed classifier.
 
 % =============================================================================
 \chapter{Data and Methodology}
+\label{ch:method}
 % =============================================================================
 \section{Study Area and Data}
-The study uses the 529 ERA5-Land~\cite{munoz2021era5land} cells (0.1$^\circ$) inside Himachal Pradesh
-(Figure~\ref{fig:area}): daily maximum, minimum and mean temperature, dewpoint, humidity, pressure, radiation, soil
-moisture and rain for 1981--2025 (16{,}436 days), with SRTM terrain~\cite{farr2007srtm}. The processed data were
-checked against the raw files; units were converted and accumulated variables shifted to the correct day.
-The 529 cells come from the download box 30.3--33.3$^\circ$N, 75.5--79.1$^\circ$E: at 0.1$^\circ$ spacing this is
-$31\times37=1{,}147$ cells, of which those whose centre lies inside the state boundary (GADM) are kept. A cell is
-about $9.4\times11.1$\,km ($\approx$105\,km$^2$) at 32$^\circ$N, so the 529 cells cover $\approx$55{,}500\,km$^2$,
-close to the state's area of about 55{,}700\,km$^2$. With four seasons this gives $529\times4=2{,}116$ thresholds.
+\subsection{Region of interest}
+The study covers Himachal Pradesh, a mountain state of about 55{,}700\,km$^2$ in the western Himalaya, whose land rises
+from about 300\,m in the south-west to more than 6{,}000\,m in the north-east (Figure~\ref{fig:area}). The state is
+represented by a regular grid of $0.1^\circ\times0.1^\circ$ cells (about 9.4\,km east--west and 11.1\,km north--south
+at $32^\circ$N, roughly 105\,km$^2$ each). The data were downloaded for the box 30.3--33.3$^\circ$N,
+75.5--79.1$^\circ$E, which holds $31\times37=1{,}147$ cells; a cell is kept when its centre lies inside the state
+boundary (GADM version 4.1). This leaves \textbf{529 cells}, covering about 55{,}500\,km$^2$, close to the area of the
+state. Every result in this report is computed on these 529 cells for each day from 1 January 1981 to 31 December
+2025 (16{,}436 days).
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.75\textwidth]{fig_study_area.png}
-\caption{Study area: 529 grid cells coloured by elevation, and three weather stations}
+\caption{Study area: the 529 grid cells coloured by mean elevation (from SRTM), with the three weather stations of the
+GSOD archive in the state}
 \label{fig:area}
 \end{figure}
+
+\subsection{Data sources}
+Two data sets provide all model inputs; a third provides the state boundary (Table~\ref{tab:sources}).
+
+\textbf{ERA5-Land}~\cite{munoz2021era5land} is a \emph{reanalysis} of the land surface produced by the European Centre
+for Medium-Range Weather Forecasts (ECMWF) for the Copernicus Climate Change Service of the European Union. A
+reanalysis re-runs a weather model over past decades while continuously correcting it with millions of real
+observations (stations, satellites, balloons), and stores the result on a regular grid. The output is therefore a
+complete, gap-free reconstruction of past weather: every cell has a value for every hour, even where no station
+exists. ERA5-Land has a grid spacing of $0.1^\circ$, hourly values from 1950 to a few days before the present, and is
+free to download from the Copernicus Climate Data Store. This study uses its daily statistics (daily maximum, minimum
+and mean of the hourly values) for 1981--2025.
+
+\textbf{SRTM}~\cite{farr2007srtm} (Shuttle Radar Topography Mission) is a digital elevation map of the Earth measured by
+radar from the Space Shuttle \emph{Endeavour} in February 2000 by NASA. It gives the height of the ground every 30\,m.
+For each grid cell the 30\,m heights were averaged to give the cell's \emph{mean elevation}, and the local slopes were
+averaged to give its \emph{mean slope}. SRTM is used only for these two fixed (time-independent) predictors.
+
+\begin{table}[H]
+\centering
+\caption{Data sources used}
+\label{tab:sources}
+\footnotesize
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{2.0cm}|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}p{2.6cm}|>{\raggedright\arraybackslash}p{3.7cm}|}
+\hline
+\textbf{Data set} & \textbf{What it is} & \textbf{Resolution, period} & \textbf{Used for}\\ \hline
+ERA5-Land & Reanalysis of past land-surface weather (ECMWF / Copernicus): a weather model corrected with observations &
+  $0.1^\circ$ ($\approx$9\,km), hourly; 1981--2025 used & Daily weather of every cell (Table~\ref{tab:vars}); the
+  labels \\ \hline
+SRTM & Radar map of ground height (NASA, February 2000) & 30\,m, one fixed map & Mean elevation and mean slope of
+  every cell \\ \hline
+GADM 4.1 & Database of administrative boundaries & Vector outline & Which cells lie inside Himachal Pradesh \\ \hline
+\end{tabularx}
+\end{table}
 
 \subsection{Why ERA5-Land, and the Data Sets Not Used}
 The data had to meet five needs. (1)~\emph{Long record}: extreme days are about 1\% of days, so decades are needed to
@@ -437,37 +548,53 @@ and checking the severe days against stations is left as future work.
 
 \subsection{ERA5-Land Variables Used}
 ERA5-Land provides about 50 variables~\cite{munoz2021era5land}. Only those with a clear link to surface heat were
-downloaded, which kept the data small enough for free cloud computing (Table~\ref{tab:vars}). Six variables were used;
-snow depth was downloaded but dropped, because glacier cells hold a fixed placeholder of 10\,m water equivalent.
+downloaded, which kept the data small enough for free cloud computing (Table~\ref{tab:vars}). Six ERA5-Land variables were used
+(temperature counts once, with its three daily statistics); snow depth was downloaded but dropped, because glacier cells hold a fixed placeholder of 10\,m water equivalent.
 Relative humidity was computed from temperature and dewpoint (Magnus formula), and elevation and slope come from SRTM
-terrain, not ERA5-Land. All 57 model inputs (Section~\ref{sec:features}) are built from these variables.
+terrain, not ERA5-Land. Temperatures were converted from
+kelvin to $^\circ$C, pressure from Pa to hPa, rain from m to mm, and radiation from J\,m$^{-2}$ per day to
+W\,m$^{-2}$; rain and radiation, which ERA5-Land stamps at midnight of the next day, were moved back to the day they
+belong to. The raw (not bias-corrected) ERA5-Land values are used. All 57 predictors
+(Table~\ref{tab:predictors}) are built from these variables and the two SRTM terrain values.
 
 \begin{table}[H]
 \centering
-\caption{ERA5-Land variables considered}
+\caption{ERA5-Land variables considered, with the units used in this report}
 \label{tab:vars}
 \footnotesize
-\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{4.3cm}|>{\raggedright\arraybackslash}p{2.1cm}|>{\raggedright\arraybackslash}X|}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{4.0cm}|>{\raggedright\arraybackslash}p{1.3cm}|>{\raggedright\arraybackslash}p{1.55cm}|>{\raggedright\arraybackslash}p{1.6cm}|>{\raggedright\arraybackslash}X|}
 \hline
-\textbf{Variable} & \textbf{Status} & \textbf{Why} \\ \hline
-2\,m air temperature (daily max, min, mean) & Used & The heat signal itself; also defines the label \\ \hline
-2\,m dewpoint temperature & Used & Air moisture; with temperature gives relative humidity \\ \hline
-Total precipitation & Used & Rain cools the surface; dry spells come before heatwaves \\ \hline
-Soil moisture, top layer (0--7\,cm) & Used & Dry soil turns more sunshine into heat \\ \hline
-Surface solar radiation downwards & Used & Sunshine reaching the ground \\ \hline
-Surface pressure & Used & Rising pressure marks settled, clear weather \\ \hline
-Snow depth & Dropped & Glacier cells stuck at a 10\,m placeholder \\ \hline
-10\,m wind, evaporation, skin temperature, runoff, deeper soil layers, thermal radiation, leaf area and other
-  variables & Not downloaded & Weaker or indirect link to next-day heat, and kept the download within free
-  computing limits; wind is left for future work \\ \hline
+\textbf{Variable} & \textbf{Code} & \textbf{Unit} & \textbf{Status} & \textbf{Why}\\ \hline
+2\,m air temperature: daily maximum, minimum, mean & \texttt{t2m\_max}, \texttt{t2m\_min}, \texttt{t2m\_mean} &
+  $^\circ$C & Used & The heat signal itself; the daily maximum also defines the label\\ \hline
+2\,m dewpoint temperature, daily mean & \texttt{d2m} & $^\circ$C & Used & Moisture in the air\\ \hline
+Relative humidity (computed) & \texttt{rh} & \% & Used & From mean temperature and dewpoint (Magnus formula)\\ \hline
+Surface pressure, daily mean & \texttt{sp} & hPa & Used & Rising pressure marks settled, clear weather\\ \hline
+Surface solar radiation downwards, daily mean & \texttt{ssrd} & W\,m$^{-2}$ & Used & Sunshine reaching the ground\\ \hline
+Soil water, top layer (0--7\,cm) & \texttt{swvl1} & m$^3$\,m$^{-3}$ & Used & Dry soil turns more sunshine into heat\\ \hline
+Total precipitation, daily total & \texttt{tp} & mm & Used & Rain cools the surface; dry spells come before
+  heatwaves\\ \hline
+Snow depth & \texttt{sd} & m water & Dropped & Glacier cells stuck at a 10\,m placeholder\\ \hline
+10\,m wind, evaporation, skin temperature, runoff, deeper soil layers, thermal radiation, leaf area, others & -- & --
+  & Not downloaded & Weaker or indirect link to next-day heat; kept the data within free computing limits\\ \hline
 \end{tabularx}
 \end{table}
 
-\section{Extreme Heat Days, Features and Splits}
+\section{Extreme Heat Days, Predictors and Splits}
 \label{sec:features}
-For cell $c$ and season $g$, the threshold $u_{c,g}$ is the 99th percentile of daily maximum temperature in
-1981--2010; a day is extreme if $T^{\max}_{c,t}>u_{c,g(t)}$. Thresholds fall by 6--7\,$^\circ$C per km of altitude
-(Figure~\ref{fig:thr}). Extremes nearly doubled in 2016--2025 (1.94\% vs 1.02\% of cell-days).
+\subsection{Seasons, thresholds and labels}
+Each day belongs to one of four seasons, following the India Meteorological Department: winter (December--February),
+pre-monsoon (March--May), monsoon (June--September) and post-monsoon (October--November). For cell $c$ and season $g$
+the threshold $u_{c,g}$ is the 99th percentile of the daily maximum temperature $T^{\max}$ of that cell in that season,
+computed from 1981--2010 only. This gives $529\times4=2{,}116$ thresholds. A day $t$ is an \emph{extreme heat day} if
+\begin{equation}
+  T^{\max}_{c,t}>u_{c,g(t)} ,
+\end{equation}
+so by construction about 1\% of the days of 1981--2010 are extreme in every cell and season. Because each cell is
+compared with its own past, a hot day in a high valley and a hot day in the plains are both detected, although their
+temperatures differ by more than 20\,$^\circ$C. Thresholds fall by 6--7\,$^\circ$C per km of altitude
+(Figure~\ref{fig:thr}). With the same fixed thresholds, extremes were almost twice as frequent in 2016--2025 as in
+1981--2010 (1.94\% vs 1.02\% of cell-days).
 
 \begin{figure}[H]
 \centering
@@ -476,9 +603,109 @@ For cell $c$ and season $g$, the threshold $u_{c,g}$ is the 99th percentile of d
 \label{fig:thr}
 \end{figure}
 
-The target is whether \emph{tomorrow} is extreme. The 57 inputs use only information available today: terrain; weather
-of the last three days; warmth, rain and soil moisture over the last 1--4 weeks; and how far today is from tomorrow's
-threshold. Data are split by year (Table~\ref{tab:splits}).
+\noindent The prediction task is: \emph{given what is known on day $D$ (today), will day $D+1$ (tomorrow) be an
+extreme heat day in this cell?} The label of a row is 1 if $D+1$ is extreme and 0 otherwise. The \emph{normal} used
+below is the 1981--2010 mean of $T^{\max}$ (or $T^{\min}$) of the cell over the 15 days centred on the same calendar
+day.
+
+\subsection{The 57 predictors}
+Each row describes one cell on one day $D$ with 57 numbers (Table~\ref{tab:predictors}), all known on day $D$: the place
+(4), the weather of the last three days (27), today's departure from normal (2), summaries of the last one to four
+weeks (16), and the distance between recent temperatures and tomorrow's threshold (8). Figure~\ref{fig:timeline} shows
+which days each group looks at. The generators (Section~\ref{sec:arch}) produce the first 49 predictors; the last
+eight are always recomputed from the cell's own threshold.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.47cm,y=0.5cm,
+  dbox/.style={draw=black!50,fill=#1,minimum height=0.5cm,minimum width=0.47cm,inner sep=0},
+  ar/.style={-{Stealth[length=2mm]},thick,draw=black!65}]
+\foreach \i in {0,...,29} { \node[dbox=black!4] at (\i,0) {}; }
+\foreach \i in {27,28} { \node[dbox=blue!18] at (\i,0) {}; }
+\node[dbox=orange!35] at (29,0) {};
+\node[dbox=red!25,draw=red!60!black] at (31,0) {};
+\node[font=\scriptsize,below] at (0,-0.4) {$D\!-\!29$};
+\node[font=\scriptsize,below] at (23,-0.4) {$D\!-\!6$};
+\node[font=\scriptsize,below] at (27,-0.4) {$D\!-\!2$};
+\node[font=\scriptsize,below] at (29,-0.4) {$D$};
+\node[font=\scriptsize,below] at (31,-0.4) {$D\!+\!1$};
+\draw[decorate,decoration={brace,amplitude=4pt},thick] (-0.5,0.6) -- (29.5,0.6) node[midway,above=4pt,font=\scriptsize]{last 30 days: rain, soil water, warmth, extreme days (16 summaries)};
+\draw[decorate,decoration={brace,amplitude=4pt,mirror},thick] (26.5,-1.4) -- (29.5,-1.4) node[midway,below=4pt,font=\scriptsize,align=center]{last 3 days:\\$9\times3=27$ values};
+\node[font=\scriptsize,align=center,red!50!black] at (31,1.7) {label:\\extreme?};
+\draw[ar] (29.6,0) -- (30.45,0);
+\end{tikzpicture}
+\caption{Days used by one row. Today is day $D$ (orange); the predictors use only days up to $D$, and the label is
+whether day $D+1$ is extreme. The 7- and 14-day summaries use the last 7 and 14 of the 30 days.}
+\label{fig:timeline}
+\end{figure}
+
+{\footnotesize
+\setlength{\LTpre}{4pt}\setlength{\LTpost}{4pt}
+\begin{longtable}{|>{\raggedright\arraybackslash}p{3.3cm}|>{\raggedright\arraybackslash}p{6.0cm}|>{\raggedright\arraybackslash}p{1.55cm}|>{\raggedright\arraybackslash}p{2.2cm}|c|}
+\caption{The 57 predictors of one row (cell $c$, day $D$). ``Normal'' is the 1981--2010 mean for the same calendar day
+($\pm7$ days); $u$ is the threshold of tomorrow's season; $s$ is the cell's standard deviation of daily
+$T^{\max}$ anomalies in that season.}\label{tab:predictors}\\
+\hline
+\textbf{Code} & \textbf{Meaning} & \textbf{Unit} & \textbf{Days used} & \textbf{No.}\\ \hline
+\endfirsthead
+\hline
+\textbf{Code} & \textbf{Meaning} & \textbf{Unit} & \textbf{Days used} & \textbf{No.}\\ \hline
+\endhead
+\hline
+\endfoot
+\rowcolor{black!6}\multicolumn{5}{|l|}{\textbf{A. Place of the cell} (fixed; grid and SRTM)} \\ \hline
+\texttt{lat}, \texttt{lon} & Latitude and longitude of the cell centre & $^\circ$N, $^\circ$E & -- & 2\\ \hline
+\texttt{elev\_m} & Mean ground height of the cell (SRTM) & m & -- & 1\\ \hline
+\texttt{slope\_deg} & Mean terrain slope of the cell (SRTM) & degrees & -- & 1\\ \hline
+\rowcolor{black!6}\multicolumn{5}{|l|}{\textbf{B. Weather of the last three days} (ERA5-Land; suffix \texttt{\_l0},
+  \texttt{\_l1}, \texttt{\_l2} = today, yesterday, day before)} \\ \hline
+\texttt{t2m\_max\_l0..l2} & Daily maximum 2\,m air temperature & $^\circ$C & $D$, $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
+\texttt{t2m\_min\_l0..l2} & Daily minimum 2\,m air temperature & $^\circ$C & $D$, $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
+\texttt{t2m\_mean\_l0..l2} & Daily mean 2\,m air temperature & $^\circ$C & $D$, $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
+\texttt{d2m\_l0..l2} & Daily mean 2\,m dewpoint temperature & $^\circ$C & $D$, $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
+\texttt{rh\_l0..l2} & Relative humidity from mean temperature and dewpoint & \% & $D$, $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
+\texttt{sp\_l0..l2} & Daily mean surface pressure & hPa & $D$, $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
+\texttt{ssrd\_l0..l2} & Daily mean solar radiation reaching the ground & W\,m$^{-2}$ & $D$, $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
+\texttt{swvl1\_l0..l2} & Soil water in the top 7\,cm & m$^3$\,m$^{-3}$ & $D$, $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
+\texttt{tp\_l0..l2} & Daily total rain & mm & $D$, $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
+\rowcolor{black!6}\multicolumn{5}{|l|}{\textbf{C. Today compared with normal}} \\ \hline
+\texttt{tmax\_anom\_l0} & Today's maximum temperature minus its normal & $^\circ$C & $D$ & 1\\ \hline
+\texttt{tmin\_anom\_l0} & Today's minimum temperature minus its normal & $^\circ$C & $D$ & 1\\ \hline
+\rowcolor{black!6}\multicolumn{5}{|l|}{\textbf{D. The last one to four weeks} (windows end on today)} \\ \hline
+\texttt{tmax\_anom\_m7, m14, m30} & Mean maximum-temperature anomaly over the last 7, 14 and 30 days & $^\circ$C & up to
+  30 days & 3\\ \hline
+\texttt{tmin\_anom\_m7, m30} & Mean minimum-temperature anomaly over the last 7 and 30 days & $^\circ$C & up to 30
+  days & 2\\ \hline
+\texttt{warm\_spell\_days} & Consecutive days up to today with maximum temperature above normal (at most 60) & days &
+  up to 60 days & 1\\ \hline
+\texttt{days\_since\_extreme} & Days since the cell's last extreme heat day (at most 365) & days & up to 365 days &
+  1\\ \hline
+\texttt{extremes\_last30} & Number of extreme heat days in the last 30 days & count & 30 days & 1\\ \hline
+\texttt{tp\_sum7, tp\_sum30} & Total rain over the last 7 and 30 days & mm & 7, 30 days & 2\\ \hline
+\texttt{swvl1\_m14, m30} & Mean top-layer soil water over the last 14 and 30 days & m$^3$\,m$^{-3}$ & 14, 30 days &
+  2\\ \hline
+\texttt{swvl1\_change14} & Soil water today minus 14 days ago (drying is negative) & m$^3$\,m$^{-3}$ & $D$, $D\!-\!14$
+  & 1\\ \hline
+\texttt{d2m\_m7} & Mean dewpoint over the last 7 days & $^\circ$C & 7 days & 1\\ \hline
+\texttt{ssrd\_m7} & Mean solar radiation over the last 7 days & W\,m$^{-2}$ & 7 days & 1\\ \hline
+\texttt{sp\_change3} & Surface pressure today minus 3 days ago & hPa & $D$, $D\!-\!3$ & 1\\ \hline
+\rowcolor{black!6}\multicolumn{5}{|l|}{\textbf{E. Distance to tomorrow's threshold} (always recomputed for synthetic
+  rows)} \\ \hline
+\texttt{dist\_l0..l2} & $T^{\max}$ of the day minus tomorrow's threshold $u$ (negative = below) & $^\circ$C & $D$,
+  $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
+\texttt{dist\_std\_l0..l2} & The same distance divided by $s$ & -- (ratio) & $D$, $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
+\texttt{dist\_trend} & \texttt{dist\_l0} minus \texttt{dist\_l1}: is the gap to the threshold closing? & $^\circ$C &
+  $D$, $D\!-\!1$ & 1\\ \hline
+\texttt{tmax\_change} & Today's maximum temperature minus yesterday's & $^\circ$C & $D$, $D\!-\!1$ & 1\\ \hline
+\rowcolor{rowhl}\multicolumn{4}{|r|}{\textbf{Total: 4 + 27 + 2 + 16 + 8}} & \textbf{57}\\ \hline
+\end{longtable}}
+
+\subsection{Training, validation and test data}
+A \emph{row} is one cell on one day, so a year gives about $529\times365\approx193{,}000$ rows. The data are split by
+the year of the label day (Table~\ref{tab:splits}), so the model is always tested on years after those it learned
+from. Training uses a random half of the cell-days of 1981--2010, which halves the memory needed while keeping 29{,}604
+extreme rows. Validation (2011--2015) is used for every choice: when LightGBM stops adding trees and where the warning
+cut-off is set. Test (2016--2025) is used once, at the end, for every reported score.
 
 \begin{table}[H]
 \centering
@@ -495,6 +722,7 @@ Test (final scores only) & 2016--2025 & 1{,}932{,}437 & 37{,}450 (1.94\%) \\ \hl
 \end{table}
 
 \section{Extreme Value Model and EVT Tail Focus}
+\label{sec:evtmodel}
 \subsection{Peaks over threshold and standardisation}
 EVT is used in its \emph{peaks-over-threshold} form: only the extreme days, those above $u_{c,g}$, are modelled. The
 99th percentile is our choice of threshold; the theory (Eq.~\ref{eq:gpd}) only requires it to be high enough. Because a
@@ -750,7 +978,29 @@ the bins and seasons match the EVT target (60\% of the mass in the top four bins
 \section{Classifier and Evaluation}
 LightGBM~\cite{ke2017lightgbm} is identical for every method. Because 98\% of days are normal, accuracy is
 uninformative; we report PR-AUC (average precision) on all days, on \emph{onset} days (heatwave starts) and on
-\emph{severe} days (the 10\% most severe extremes), plus precision and recall. Each method is trained with five seeds;
+\emph{severe} days (the 10\% most severe extremes), plus precision and recall. Table~\ref{tab:metrics} defines every
+measure. In it, a \emph{hit} is an extreme day that received a warning, a \emph{miss} an extreme day without one, and a
+\emph{false alarm} a normal day that received one.
+
+\begin{table}[H]
+\centering
+\caption{Evaluation measures (all computed on the test years 2016--2025)}
+\label{tab:metrics}
+\footnotesize
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{3.0cm}|X|>{\raggedright\arraybackslash}p{2.6cm}|}
+\hline
+\textbf{Measure} & \textbf{Definition} & \textbf{Range}\\ \hline
+Precision & hits / (hits + false alarms): share of warnings that were right & 0--1 \\ \hline
+Recall & hits / (hits + misses): share of extreme days that were warned & 0--1 \\ \hline
+False-alarm rate & false alarms / all normal days & 0--1 \\ \hline
+CSI & hits / (hits + misses + false alarms), the critical success index of weather forecasting & 0--1 \\ \hline
+PR-AUC (average precision) & Area under the precision--recall curve: the precision averaged over all warning cut-offs,
+  weighted by the gain in recall & 0--1; random = share of extreme days ($\approx$0.02) \\ \hline
+PR-AUC, onset days & PR-AUC computed only on rows where today's maximum temperature is still below tomorrow's threshold; the extreme days among them are first days of a heatwave & as above \\ \hline
+PR-AUC, severe days & PR-AUC computed on all normal days plus only the 10\% most severe extreme days (largest standardised excess $z$); the other extreme days are left out & as above \\ \hline
+Warning cut-off & The probability above which a warning is given; chosen to maximise F1 on 2011--2015 & -- \\ \hline
+\end{tabularx}
+\end{table} Each method is trained with five seeds;
 differences are tested by resampling whole test months. The baseline is \emph{persistence}: ``tomorrow will be like
 today''.
 

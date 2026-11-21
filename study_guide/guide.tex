@@ -1,0 +1,111 @@
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[T1]{fontenc}
+\IfFileExists{newtxtext.sty}{\usepackage{newtxtext,newtxmath}}{\usepackage{mathptmx}}
+\usepackage{microtype}
+\usepackage[a4paper,left=25mm,right=25mm,top=25mm,bottom=25mm]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{graphicx,float,booktabs,array,tabularx,longtable,multirow}
+\usepackage[table]{xcolor}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+\usepackage{enumitem}
+\setlist{itemsep=2pt,topsep=4pt}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing,shapes.geometric}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usepackage[most]{tcolorbox}
+\usepackage[colorlinks=true,citecolor=blue,urlcolor=blue,linkcolor=blue]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\renewcommand{\arraystretch}{1.2}
+
+% ----- chapters show only "N. Title", as in the previous report
+\usepackage{titlesec}
+\titleformat{\chapter}{\normalfont\huge\bfseries}{\thechapter.}{0.5em}{}
+\titlespacing*{\chapter}{0pt}{0pt}{10pt}
+
+% ----- header / footer
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{Study guide: Heat at the Tail}
+\rhead{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancypagestyle{plain}{\fancyhf{}\lhead{Study guide: Heat at the Tail}\rhead{\thepage}\renewcommand{\headrulewidth}{0.4pt}}
+
+% ----- boxes
+\newtcolorbox{keyidea}[1][]{colback=blue!4,colframe=blue!55!black,boxrule=0.6pt,arc=2pt,left=6pt,right=6pt,top=4pt,bottom=4pt,fonttitle=\bfseries\small,title={#1}}
+\newtcolorbox{example}[1][]{colback=orange!6,colframe=orange!70!black,boxrule=0.6pt,arc=2pt,left=6pt,right=6pt,top=4pt,bottom=4pt,fonttitle=\bfseries\small,title={#1}}
+\newtcolorbox{sayit}{colback=green!5,colframe=green!45!black,boxrule=0.6pt,arc=2pt,left=6pt,right=6pt,top=4pt,bottom=4pt,fonttitle=\bfseries\small,title={How to say it in the presentation}}
+
+% ----- tikz styles shared by all figures
+\tikzset{
+  bx/.style={draw=black!55,rounded corners=2pt,align=center,font=\footnotesize,inner sep=4pt,minimum height=1.0cm},
+  bdat/.style={bx,fill=black!4},
+  blue box/.style={bx,fill=blue!8,draw=blue!55!black},
+  orange box/.style={bx,fill=orange!12,draw=orange!70!black},
+  green box/.style={bx,fill=green!8,draw=green!45!black},
+  red box/.style={bx,fill=red!8,draw=red!60!black},
+  ar/.style={-{Stealth[length=2.2mm]},thick,draw=black!65}}
+
+\begin{document}
+
+% =========================================================================
+% TITLE PAGE
+% =========================================================================
+\thispagestyle{empty}
+\begin{center}
+{\large\em Study guide for the Major Technical Project}\\[4ex]
+{\LARGE\bf Heat at the Tail}\\[2ex]
+{\Large Understanding every term and step of\\ ``Extreme Value-Guided Deep Generative Models for Imbalanced Classification''}\\[5ex]
+{\large\bf Divyansh Jain}\\[1ex]
+{\large B23397}\\[1ex]
+{\large School of Mathematical and Statistical Sciences, IIT Mandi}\\[1ex]
+{\large Supervisor: Dr. Rishikesh Yadav}\\[6ex]
+\end{center}
+
+\begin{keyidea}[What this guide is]
+This is a personal learning document, not the project report. It explains, in plain words and with pictures, every
+idea, term and number used in the project, in the order you need them: the data, what an extreme day is, how the data
+are turned into rows, why rare classes are hard, extreme value theory, the three generative models, the classifier, how
+results are measured, and what was found. Each chapter ends with a short ``how to say it'' box, and the last pages hold
+likely questions and a glossary. All numbers are the project's own results, checked against the code and the result
+files.
+\end{keyidea}
+
+\vfill
+\begin{center}
+\begin{tikzpicture}[node distance=5mm]
+\node[bdat,text width=2.4cm] (a) {\textbf{Data}\\Ch.~\ref{ch:data}};
+\node[blue box,text width=2.4cm,right=of a] (b) {\textbf{Extreme days}\\Ch.~\ref{ch:extreme}--\ref{ch:rows}};
+\node[red box,text width=2.4cm,right=of b] (c) {\textbf{EVT}\\Ch.~\ref{ch:imb}--\ref{ch:evt}};
+\node[orange box,text width=2.4cm,right=of c] (d) {\textbf{Generators}\\Ch.~\ref{ch:gen}};
+\node[green box,text width=2.4cm,below=8mm of b] (e) {\textbf{Classifier}\\Ch.~\ref{ch:clf}};
+\node[green box,text width=2.4cm,right=of e] (f) {\textbf{Scores}\\Ch.~\ref{ch:metrics}};
+\node[green box,text width=2.4cm,right=of f] (g) {\textbf{Results}\\Ch.~\ref{ch:results}};
+\draw[ar] (a) -- (b); \draw[ar] (b) -- (c); \draw[ar] (c) -- (d);
+\draw[ar] (d.south) |- ++(0,-0.4) -| (e.north); \draw[ar] (e) -- (f); \draw[ar] (f) -- (g);
+\end{tikzpicture}
+\end{center}
+\vfill
+
+\tableofcontents
+\clearpage
+
+\input{ch1_overview}
+\input{ch2_data}
+\input{ch3_extreme}
+\input{ch4_rows}
+\input{ch5_imbalance}
+\input{ch6_evt}
+\input{ch7_generators}
+\input{ch8_classifier}
+\input{ch9_metrics}
+\input{ch10_results}
+\input{ch11_questions}
+\input{glossary}
+
+\end{document}
