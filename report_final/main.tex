@@ -775,10 +775,131 @@ Soil water, top layer (0--7\,cm) & \texttt{swvl1} & m$^3$\,m$^{-3}$ & Used & Dry
 Total precipitation, daily total & \texttt{tp} & mm & Used & Rain cools the surface; dry spells come before
   heatwaves\\ \hline
 Snow depth & \texttt{sd} & m water & Dropped & Glacier cells stuck at a 10\,m placeholder\\ \hline
-10\,m wind, evaporation, skin temperature, runoff, deeper soil layers, thermal radiation, leaf area, others & -- & --
+10\,m wind ($u$, $v$, speed) & \texttt{u10}, \texttt{v10} & m\,s$^{-1}$ & In file, not used & Daily-mean wind
+  over steep terrain is a weak, indirect signal for next-day heat\\ \hline
+Evaporation, skin temperature, runoff, deeper soil layers, thermal radiation, leaf area, others & -- & --
   & Not downloaded & Weaker or indirect link to next-day heat; kept the data within free computing limits\\ \hline
 \end{tabularx}
 \end{table}
+
+% =============================================================================
+\section{Data Processing and Quality Checks}
+\label{sec:processing}
+Before any model was built, the downloaded data were assembled into one file, checked against the original
+ERA5-Land files, repaired where needed, and turned into model rows in three versions. This section records that
+work, because every later result depends on it. All checks only read the data; repairs were written to new files.
+
+\subsection{From downloads to one data file}
+ERA5-Land daily statistics were downloaded from the Copernicus Climate Data Store one variable and one year at a
+time for the box 30.3--33.3$^\circ$N, 75.5--79.1$^\circ$E. They were merged into a single file covering 16{,}436 days
+(1 January 1981 to 31 December 2025) on the $31\times37$ grid, with 15 daily variables. Besides the variables of
+Table~\ref{tab:vars}, the file also held 10\,m wind ($u$, $v$ and speed), the daily temperature range, and CHIRPS
+satellite--gauge rainfall~\cite{funk2015chirps}; these were not used as predictors (the temperature range repeats
+maximum minus minimum, and ERA5-Land rain was kept so that all predictors come from one consistent source). Static
+layers were added: mean SRTM elevation and slope of each cell, and a mask marking the 529 cells whose centre lies in
+Himachal Pradesh.
+
+\subsection{Check against the original files}
+A read-only check (Table~\ref{tab:qc}) compared the merged file with the original ERA5-Land files at five cells from
+522\,m to 5{,}279\,m and six sample years (1981, 1990, 1991, 2005, 2020, 2025), and checked completeness and physical
+consistency over all 529 cells and all days.
+
+\begin{table}[H]
+\centering
+\caption{Quality checks on the merged data file (Himachal cells, 1981--2025)}
+\label{tab:qc}
+\footnotesize
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{3.6cm}|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}p{4.4cm}|}
+\hline
+\textbf{Check} & \textbf{Result} & \textbf{Action}\\ \hline
+Daily max, min, mean temperature and dewpoint vs original files & Identical after subtracting 273.15 (kelvin to
+$^\circ$C), same day; largest difference 0.00 & None\\ \hline
+Soil water and snow depth vs original & Identical & None\\ \hline
+Rain vs original & Identical after $\times1000$ (m to mm) \emph{and a shift of one day}: ERA5-Land stamps a day's
+total at 00\,UTC of the next day & Rain moved back to its own day\\ \hline
+Pressure and solar radiation & Ranges 497--986\,hPa and 8--414\,W\,m$^{-2}$, consistent with Pa$\to$hPa and daily
+J\,m$^{-2}\to$ W\,m$^{-2}$ (radiation also shifted one day) & None\\ \hline
+Completeness & 100\% of cell-days for every variable and year, except daily mean temperature and humidity: empty for
+1981--1985 although the original files were complete & Refilled from the original files; humidity recomputed
+(Section~\ref{sec:repairs})\\ \hline
+Snow depth & 6 of 529 cells (glaciers, 5{,}122--5{,}552\,m) stuck at 10\,m water equivalent on most days & Snow depth
+dropped\\ \hline
+Physical consistency & Minimum above maximum: 0 of 8{,}694{,}644 cell-days. Mean outside [min, max] by more than
+0.5\,$^\circ$C: 0 of 7{,}728{,}690. Maximum temperature from $-36.6$ to $45.5\,^\circ$C & None\\ \hline
+Label idea & Share of cell-days above each cell's own 99th percentile of maximum temperature: 1.00\% & Basis of the
+labels\\ \hline
+\end{tabularx}
+\end{table}
+
+\subsection{Repairs}
+\label{sec:repairs}
+Daily mean temperature for 1981--1985 was copied from the original ERA5-Land files (365 or 366 days per year), after
+which no variable had a missing value. Relative humidity was recomputed for all years from mean temperature $T$ and
+dewpoint $T_d$ with the Magnus formula,
+\[
+\mathrm{RH} = 100\,\exp\!\left(\frac{a\,T_d}{b+T_d}-\frac{a\,T}{b+T}\right),\qquad a=17.625,\; b=243.04\,^\circ\mathrm{C};
+\]
+where the old file had humidity, the recomputed values differed by at most 0.03 percentage points.
+
+\subsection{Weather stations as a reference}
+To see whether station records could serve as ground truth, all NOAA GSOD stations~\cite{gsod} in the box were
+checked for 2000--2025 (temperatures converted from $^\circ$F, missing values coded 9999.9 removed). Of 26 station
+entries, 11 reported any data, and only three inside the state had at least eight years with 80\% of days complete
+(Table~\ref{tab:gsod}). This is far too few for a 529-cell study, so stations are used only as reference points
+(Figure~\ref{fig:area}), not as labels.
+
+\begin{table}[H]
+\centering
+\caption{GSOD stations in Himachal Pradesh with usable records, 2000--2025}
+\label{tab:gsod}
+\small
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Station} & \textbf{Elevation (m)} & \textbf{Days with max and min (\%)} & \textbf{Usable years ($\ge$80\% of days)}\\ \hline
+Sundernagar & 874 & 71.9 & 8\\ \hline
+Bhuntar (Kullu) & 1{,}084 & 34.9 & 9\\ \hline
+Shimla & 2{,}202 & 33.0 & 9\\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Three versions of the model rows}
+The model rows were built three times, each fixing a problem found by the one before (Table~\ref{tab:versions}).
+
+\begin{table}[H]
+\centering
+\caption{Versions of the model-ready data}
+\label{tab:versions}
+\footnotesize
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{1.7cm}|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X|}
+\hline
+\textbf{Version} & \textbf{What it contained} & \textbf{What it showed}\\ \hline
+v1--v2 & 35 predictors (place, day of year, 9 weather values for 3 days, today's anomalies); six labels: heat and
+cold extremes, each against the same season, the whole year, or the same time of year ($\pm7$ days); all
+5{,}794{,}666 training rows & Whole-year labels put almost all heat extremes in May--August (0.00\% in
+November--February), so a hot winter day never counted; season-wise labels give about 1\% in every season and were
+kept. Cold extremes were left for future work\\ \hline
+v2 + fixes & Standardised GPD fits; gap-to-threshold predictors added (how far today and the two days before are from
+tomorrow's threshold) & Without them, persistence (0.586 test PR-AUC) beat LightGBM (0.434). They raised LightGBM to
+0.531, and the day-of-year predictors were found to hurt (0.549 without them), so they were dropped\\ \hline
+v3 (final) & 57 predictors (Table~\ref{tab:predictors}) with 7--30-day history; a random half of the 1981--2010 rows
+(2{,}889{,}927) for training; severity $z$ and onset stored for scoring only & With 7--30-day history LightGBM on real data reached 0.599, above persistence; used for all results in
+Chapter~\ref{ch:results}\\ \hline
+\end{tabularx}
+\end{table}
+
+\subsection{What the processed data show}
+Figure~\ref{fig:yearly} shows the share of extreme heat cell-days in each year. By construction it averages 1\% over
+1981--2010 (1.02\% in the training years); it stays at 1.00\% in 2011--2015 and almost doubles to 1.94\% in
+2016--2025, with peaks in 2016, 2020 and 2024. The most widespread single events were 6 October 1983 (522 of 529
+cells extreme), 26 May 1984 (448 cells) and 4 December 1988 (383 cells).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{fig_yearly_extremes.png}
+\caption{Share of extreme heat cell-days per year (season-wise 99th-percentile labels, 529 cells). Dashed line: the
+1\% that the 1981--2010 thresholds give by construction.}
+\label{fig:yearly}
+\end{figure}
 
 \section{Extreme Heat Days, Predictors and Splits}
 \label{sec:features}
@@ -1214,6 +1335,7 @@ data~\cite{grinsztajn2022tree}, so LightGBM was kept.
 
 % =============================================================================
 \chapter{Results and Discussion}
+\label{ch:results}
 % =============================================================================
 \section{Lessons from the First Experiments}
 \begin{itemize}
@@ -1578,6 +1700,7 @@ generation methods under a fixed classifier; and open, reproducible code that ru
 \bibitem{naturalearth} Natural Earth, \reflink{https://www.naturalearthdata.com}{Free vector map data at 1:10m scale} (admin-0, India point of view; admin-1 states).
 \bibitem{saito2015pr} T. Saito and M. Rehmsmeier, \reflink{https://doi.org/10.1371/journal.pone.0118432}{The precision-recall plot is more informative than the ROC plot when evaluating binary classifiers on imbalanced datasets}, PLOS ONE 10(3): e0118432, 2015.
 \bibitem{davis2006pr} J. Davis and M. Goadrich, \reflink{https://doi.org/10.1145/1143844.1143874}{The relationship between precision-recall and ROC curves}, Proceedings of the 23rd International Conference on Machine Learning (ICML), 2006.
+\bibitem{funk2015chirps} C. Funk et al., \reflink{https://doi.org/10.1038/sdata.2015.66}{The climate hazards infrared precipitation with stations: a new environmental record for monitoring extremes}, Scientific Data 2, 150066, 2015.
 \end{thebibliography}}
 
 \end{document}
