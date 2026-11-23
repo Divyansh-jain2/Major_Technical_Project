@@ -151,10 +151,12 @@ gap-to-threshold numbers (group E) are always recomputed afterwards. All three g
 \caption{Counts for TVAE and CTGAN. The diffusion model is asked directly for the EVT severities.}
 \end{figure}
 \begin{itemize}
-  \item \textbf{Physics clean-up:} each generated row is moved to the nearest real cell (taking its real height and
-        slope); minimum $\le$ mean $\le$ maximum temperature; dewpoint $\le$ temperature; humidity 0--100\%; rain and
-        sunshine not negative; soil water between 0 and 0.8; counts made whole numbers in range; the 8 gap columns
-        recomputed from that cell's threshold.
+  \item \textbf{Consistency clean-up} (the code calls it ``physics''; say ``consistency and range clean-up''):
+        each generated row is moved to the nearest real cell (taking its real height and slope); the three daily
+        temperatures are \emph{sorted} so that minimum $\le$ mean $\le$ maximum; dewpoint is capped at the mean
+        temperature; humidity is cut to 0--100\%; rain and sunshine are cut at 0; soil water is cut to 0--0.8; counts
+        are cut to range and rounded; the 8 gap columns are recomputed from that cell's threshold. It removes
+        impossible values; it does \emph{not} make a day realistic (see the box below).
   \item \textbf{Judge model (TVAE and CTGAN only):} these two cannot be asked for a severity, so a separate LightGBM
         model, trained on real extremes, estimates the severity $z$ of each generated row; rows are then picked so that
         their tail positions match the EVT target (60\% in the top fifth) and their seasons match the real shares.
@@ -162,8 +164,40 @@ gap-to-threshold numbers (group E) are always recomputed afterwards. All three g
         the day and snapped to a real cell; so new days appear where extremes really occur.
 \end{itemize}
 
+
+\begin{keyidea}[What the clean-up does not do (say it before they ask)]
+\begin{itemize}
+  \item Humidity is not recomputed after the dewpoint is capped, so humidity, temperature and dewpoint can disagree.
+  \item Temperature is not checked against the height of the cell the row is snapped to (a 40\,$^\circ$C row can land
+        on a 4{,}000\,m cell; its gap columns then become very large).
+  \item Anomaly and 7--30-day history columns are not recomputed from the daily values.
+\end{itemize}
+Real data break none of the rules (about 0\%); raw TVAE rows broke at least one in 75\% of cases, CTGAN in 69\%, the
+diffusion model in about 0\%.
+\end{keyidea}
+
+\begin{keyidea}[Why 0.8 for soil moisture?]
+\textbf{What the number is.} Soil moisture here (\texttt{swvl1}) is \emph{volumetric}: the fraction of the top 7\,cm
+of soil that is water, in m$^3$\,m$^{-3}$. It can never be larger than the share of the soil that is empty space
+(its \emph{saturation} or porosity): once every pore is full, no more water fits.
+
+\textbf{What ERA5-Land allows.} ERA5-Land's land model (H-TESSEL) gives each soil texture a saturation value taken
+from the European HYPRES soil table: about 0.40 for coarse (sandy) soil and at most 0.766 for organic soil. So the
+model itself can never produce more than about 0.77.
+
+\textbf{What our data show.} Over all 529 cells and all days 1981--2025, \texttt{swvl1} ranged from 0.012 to
+\textbf{0.751} (median 0.304), from the Step 1 check.
+
+\textbf{So why 0.8?} It is a round upper bound chosen by us, just above both the model's maximum (0.766) and the
+largest real value (0.751). It therefore never cuts a value that real data could contain; it only removes generated
+values that are impossible (above 0.8, or below 0). It is a sanity limit, not a physical constant.
+
+\textbf{Honest weakness.} A stricter choice would use each cell's own soil saturation (or its highest value in
+1981--2010): a value of 0.78 is impossible for a mineral soil but still passes 0.8.
+\end{keyidea}
+
 \begin{sayit}
 ``TVAE compresses a day into a code and rebuilds it; new codes give new days. CTGAN is a generator and a critic that
 compete. The diffusion model learns to remove noise step by step and can be asked for a season and a severity. Each
-learns from the 29,604 real extremes, and every generated day is cleaned to obey physics and placed on a real cell.''
+learns from the 29,604 real extremes, and every generated day is cut to valid ranges, made internally consistent and placed on a real cell.''
 \end{sayit}

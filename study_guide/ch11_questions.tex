@@ -47,5 +47,14 @@ also stops anything above 1.5 times the hottest real excess.}
 \qa{Why 529 cells?}{The ERA5-Land grid (0.1$^\circ$) over the box around Himachal Pradesh has $31\times37=1{,}147$
 cells; 529 have their centre inside the state boundary.}
 
+\qa{Why cap soil moisture at 0.8?}{Soil moisture is the fraction of the soil that is water and cannot exceed the
+soil's saturation. In ERA5-Land's land model the largest saturation is 0.766 (organic soil), and our data never went
+above 0.751. So 0.8 is a round limit just above anything real: it removes only impossible generated values and never
+cuts a realistic one. It is our choice, not a constant; a per-cell limit would be stricter.}
+
+\qa{Is the physics clean-up real physics?}{No, it is a consistency and range clean-up: rows are placed on a real
+cell, values are cut to valid ranges, temperatures are ordered and the gap columns recomputed. It removes impossible
+values but does not check a day against a weather model; humidity and the history columns are not recomputed.}
+
 \qa{What would you do next?}{Longer lead times; let the GPD vary by cell or with elevation; check synthetic days with a
 meteorologist; try the method in another region.}
