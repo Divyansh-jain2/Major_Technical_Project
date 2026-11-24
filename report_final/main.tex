@@ -19,7 +19,6 @@
 \newcommand{\SupervisorName}{Dr. Rishikesh Yadav}
 \newcommand{\SupervisorTitle}{Mentor}
 \newcommand{\SchoolName}{School of Mathematical and Statistical Sciences}
-\newcommand{\CourseCode}{XX-499P}                               % TODO: course code
 \newcommand{\ReportKind}{Final Report}
 \newcommand{\ReportMonth}{November 2026}
 \newcommand{\CertificateDate}{November 2026}                    % TODO: exact date if needed
@@ -138,7 +137,7 @@
 \vspace{0.5cm}
 {\fontsize{14}{17}\selectfont \ReportSubtitle\par}
 \vspace{0.8cm}
-{\bfseries\Large Major Technical Project - II (\CourseCode)\par}
+{\bfseries\Large Major Technical Project - II\par}
 {\large (\ReportKind)\par}
 \vspace{0.8cm}
 {\large by\par}
@@ -162,7 +161,7 @@
 \chapter*{Certificate}
 This is to certify that the work contained in the project report titled
 \textbf{``\ReportTitle,''} submitted by \StudentName\ at the Indian Institute of Technology Mandi for the course
-\CourseCode\ (Major Technical Project-II), is a record of bonafide research work carried out under my direct
+Major Technical Project-II, is a record of bonafide research work carried out under my direct
 supervision and guidance.
 
 \vspace{3.5cm}
@@ -273,7 +272,7 @@ as frequent as in 1981--2010.
 \begin{enumerate}
   \item \textbf{Local extremes:} each cell and season has its own threshold.
   \item \textbf{EVT decides where to add data:} extra examples go where the tail is thinnest.
-  \item \textbf{Fair comparison:} one fixed classifier, physics enforced on every synthetic day, choices made on a
+  \item \textbf{Fair comparison:} one fixed classifier, every synthetic day placed on a real cell and cut to valid ranges, choices made on a
         validation period, five training seeds.
 \end{enumerate}
 
@@ -309,7 +308,7 @@ that appears in it.
 \node[gen] (c1) at (0,-5.7) {\textbf{Real extremes}\\29{,}604 extreme rows\\of the training years};
 \node[gen] (c2) at (3.25,-5.7) {\textbf{Generator}\\TVAE, CTGAN or\\conditional diffusion\\learns these rows};
 \node[evt] (c3) at (6.5,-5.7) {\textbf{EVT tail focus}\\GPD fit of severity;\\60\% of new days from\\the rarest 20\%};
-\node[gen] (c4) at (9.75,-5.7) {\textbf{Physics clean-up}\\placed on a real cell;\\impossible values\\repaired};
+\node[gen] (c4) at (9.75,-5.7) {\textbf{Consistency clean-up}\\placed on a real cell;\\values cut to\\valid ranges};
 \node[gen] (c5) at (13.0,-5.7) {\textbf{Synthetic extremes}\\29{,}604 new rows\\(one per real\\extreme)};
 \draw[ar] (c1) -- (c2); \draw[ar] (c2) -- (c3); \draw[ar] (c3) -- (c4); \draw[ar] (c4) -- (c5);
 % (d) prediction and testing
@@ -411,7 +410,7 @@ often break physics; large models need resources beyond a student project.
 
 \section{How Our Approach Differs}
 Extremes are defined per cell and season; a fitted EVT model decides which severities to add and caps how far they go;
-the same EVT focus works with any generator (or none); every synthetic day obeys physics; and everything runs on free
+the same EVT focus works with any generator (or none); every synthetic day is placed on a real cell and cut to valid ranges; and everything runs on free
 compute.
 
 % =============================================================================
@@ -908,7 +907,7 @@ computed from 1981--2010 only. This gives $529\times4=2{,}116$ thresholds. A day
 \end{equation}
 so by construction about 1\% of the days of 1981--2010 are extreme in every cell and season. Because each cell is
 compared with its own past, a hot day in a high valley and a hot day in the plains are both detected, although their
-temperatures differ by more than 20\,$^\circ$C. Thresholds fall by 6--7\,$^\circ$C per km of altitude
+temperatures differ by more than 20\,$^\circ$C. Thresholds fall by about 5.5--8\,$^\circ$C per km of altitude, depending on the season
 (Figure~\ref{fig:thr}). With the same fixed thresholds, extremes were almost twice as frequent in 2016--2025 as in
 1981--2010 (1.94\% vs 1.02\% of cell-days).
 
@@ -1312,9 +1311,12 @@ today''.
 
 \textbf{Neural-network comparison.} A multilayer perceptron (three hidden layers of 256 units, SiLU, dropout 0.1,
 sigmoid output; inputs standardised and clipped to $\pm10$; binary cross-entropy; AdamW, learning rate $10^{-3}$;
-6 epochs, 2 seeds) was tried in an early run on the same inputs. It scored about the same as LightGBM on real data
-(PR-AUC 0.597 vs 0.594) but needs a GPU and is slower; tree ensembles are also generally stronger on tabular
-data~\cite{grinsztajn2022tree}, so LightGBM was kept.
+6 epochs, 2 seeds) was tried in an early run on the same inputs. On real data alone it scored about the same as LightGBM
+on all days (PR-AUC 0.597 vs 0.594) and better on the most severe days (0.576 vs 0.461, one seed). However, every
+synthetic data set made the MLP worse on all three scores, while LightGBM gained on the most severe days (0.461
+to 0.580 with EVT-guided diffusion days); since this project tests what added extreme
+days do, LightGBM was kept. It also trains on a normal CPU, and tree ensembles are generally strong on tabular
+data~\cite{grinsztajn2022tree}.
 
 % =============================================================================
 \chapter{Results and Discussion}
@@ -1338,10 +1340,14 @@ data~\cite{grinsztajn2022tree}, so LightGBM was kept.
 \hline
 \textbf{Generator} & \makecell{\textbf{Raw rows}\\\textbf{breaking physics}} & \makecell{\textbf{Follows requested}\\\textbf{severity}} & \makecell{\textbf{Training}\\\textbf{time}} \\ \hline
 TVAE / CTGAN & 69--75\% & -- & 18--24 min \\ \hline
-Conditional diffusion & $\approx$0\% & 0.67 (real: 0.78) & 30 min \\ \hline
+Conditional diffusion & $\approx$0\%$^{*}$ & 0.64--0.67 (real: 0.78) & 30 min \\ \hline
 \end{tabular}
+
+\vspace{2pt}{\footnotesize $^{*}$ For the diffusion model only the temperature order was recorded: 0.0--0.2\% of rows needed reordering.}
 \end{table}
-Only the diffusion model reliably produced physically valid days of the requested severity.
+``Raw rows breaking physics'' counts generated rows that broke at least one simple consistency rule (for example
+minimum above maximum temperature, humidity outside 0--100\%, negative rain) before the clean-up. TVAE and CTGAN
+broke one in most rows. Only the diffusion model could be asked for a severity and followed it closely.
 
 \section{Comparison of Generation Methods}
 \begin{figure}[H]
@@ -1580,7 +1586,10 @@ to today.
 \section{Limitations}
 Results are based on reanalysis data, not yet checked against station records; only next-day heat was modelled; the
 gain over persistence on all days is modest; the tail-focus setting was fixed by hand; and free compute limited
-training to half of 1981--2010.
+training to half of 1981--2010. The clean-up of synthetic days only cuts values to valid ranges and orders the three
+daily temperatures: humidity is not recomputed after the dewpoint is capped, temperatures are not checked against
+the height of the cell a row is placed on, and the 7--30-day history columns are not recomputed from the daily
+values.
 
 % =============================================================================
 \chapter{Conclusion and Future Work}

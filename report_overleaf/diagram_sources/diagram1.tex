@@ -44,7 +44,7 @@
 \node[gen] (c1) at (0,-5.7) {\textbf{Real extremes}\\29{,}604 extreme rows\\of the training years};
 \node[gen] (c2) at (3.25,-5.7) {\textbf{Generator}\\TVAE, CTGAN or\\conditional diffusion\\learns these rows};
 \node[evt] (c3) at (6.5,-5.7) {\textbf{EVT tail focus}\\GPD fit of severity;\\60\% of new days from\\the rarest 20\%};
-\node[gen] (c4) at (9.75,-5.7) {\textbf{Physics clean-up}\\placed on a real cell;\\impossible values\\repaired};
+\node[gen] (c4) at (9.75,-5.7) {\textbf{Consistency clean-up}\\placed on a real cell;\\values cut to\\valid ranges};
 \node[gen] (c5) at (13.0,-5.7) {\textbf{Synthetic extremes}\\29{,}604 new rows\\(one per real\\extreme)};
 \draw[ar] (c1) -- (c2); \draw[ar] (c2) -- (c3); \draw[ar] (c3) -- (c4); \draw[ar] (c4) -- (c5);
 % (d) prediction and testing
