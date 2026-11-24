@@ -420,8 +420,9 @@ compute.
 Remedies either weight the rare class more or resample. SMOTE~\cite{chawla2002smote} creates points between a rare
 example $x_i$ and a rare neighbour $x_{nn}$:
 \begin{equation}
-  x_{\text{new}} = x_i + \lambda\,(x_{nn}-x_i), \qquad \lambda\sim\mathcal{U}(0,1).
+  x_{\text{new}} = x_i + \lambda\,(x_{nn}-x_i),
 \end{equation}
+where $\lambda$ is a random number between 0 and 1, so the new point lies on the line joining the two.
 Borderline-SMOTE~\cite{han2005borderline} and ADASYN~\cite{he2008adasyn} focus on hard examples. For strong
 classifiers such as gradient-boosted trees, balancing seldom helps~\cite{elor2022smote}.
 
@@ -432,19 +433,16 @@ follows a Generalized Pareto Distribution (GPD)~\cite{coles2001}:
   F_{\xi,\sigma}(y)=1-\left(1+\frac{\xi y}{\sigma}\right)^{-1/\xi},\qquad y>0 .
   \label{eq:gpd}
 \end{equation}
-The shape $\xi$ sets the tail: $\xi<0$ bounded (expected for temperature), $\xi=0$ exponential, $\xi>0$ heavy.
+Here $F_{\xi,\sigma}(y)$ is the chance that an excess is at most $y$, the scale $\sigma$ sets how spread out the excesses are, and the shape $\xi$ sets the tail: $\xi<0$ bounded (expected for temperature), $\xi=0$ exponential, $\xi>0$ heavy.
 
 \section{Generative Models for Tabular Data}
-A GAN~\cite{goodfellow2014gan} trains a generator $G$ against a discriminator $D$:
-\begin{equation}
-  \min_G\max_D\; \mathbb{E}_{x}[\log D(x)]+\mathbb{E}_{z}[\log(1-D(G(z)))].
-\end{equation}
-CTGAN and TVAE~\cite{xu2019ctgan} adapt
-GANs and VAEs~\cite{kingma2014vae} to tables. Diffusion models~\cite{ho2020ddpm} add noise $q(x_\tau|x_0)=\mathcal{N}(\sqrt{\bar\alpha_\tau}x_0,(1-\bar\alpha_\tau)I)$
-and learn to remove it:
-\begin{equation}
-  \mathcal{L}=\mathbb{E}\left\lVert\epsilon-\epsilon_\theta(x_\tau,\tau,c)\right\rVert^2 .
-\end{equation}
+A generative adversarial network (GAN)~\cite{goodfellow2014gan} trains two networks against each other: a
+\emph{generator}, which turns random noise into data, and a \emph{discriminator}, which tries to tell real data from
+generated data. Each improves against the other until the generated data look real. A variational autoencoder
+(VAE)~\cite{kingma2014vae} instead learns to compress each example into a short code and rebuild it; new examples are
+made by decoding random codes. CTGAN and TVAE~\cite{xu2019ctgan} adapt GANs and VAEs to tables. Diffusion
+models~\cite{ho2020ddpm} add random noise to the data step by step and train a network to predict, and so remove, the
+added noise; new data are made by starting from pure noise and removing it step by step.
 Diffusion is strong for tabular data~\cite{kotelnikov2023tabddpm} and for minority samples~\cite{dsouza2025overlap}.
 
 \section{Extremes and Generative Models}
@@ -835,11 +833,7 @@ labels\\ \hline
 \label{sec:repairs}
 Daily mean temperature for 1981--1985 was copied from the original ERA5-Land files (365 or 366 days per year), after
 which no variable had a missing value. Relative humidity was recomputed for all years from mean temperature $T$ and
-dewpoint $T_d$ with the Magnus formula,
-\[
-\mathrm{RH} = 100\,\exp\!\left(\frac{a\,T_d}{b+T_d}-\frac{a\,T}{b+T}\right),\qquad a=17.625,\; b=243.04\,^\circ\mathrm{C};
-\]
-where the old file had humidity, the recomputed values differed by at most 0.03 percentage points.
+dewpoint $T_d$ with the standard Magnus formula (constants $a=17.625$ and $b=243.04\,^\circ$C); where the old file had humidity, the recomputed values differed by at most 0.03 percentage points.
 
 \subsection{Weather stations as a reference}
 To see whether station records could serve as ground truth, all NOAA GSOD stations~\cite{gsod} in the box were
@@ -1094,22 +1088,19 @@ standardising removes this ($+0.07$, interval including zero).
 \subsection{Tail position and EVT tail focus}
 The fitted GPD $F_g$ of season $g$ gives every extreme a \emph{tail position} $q=F_g(z)\in[0,1)$: $q=0.9$ means more
 severe than 90\% of extreme days of that season. \textbf{EVT tail focus} draws the tail positions of the added
-extremes from a two-part mixture,
+extremes in two equal halves: half are drawn evenly from the whole tail (0 to 1) and half evenly from its top fifth
+(0.8 to 1). The share that lands in the top fifth is therefore
 \begin{equation}
-  q\sim 0.5\,\mathcal{U}(0,1)+0.5\,\mathcal{U}(0.8,1),
-  \qquad
-  P(q\ge0.8)=0.5\times0.2+0.5\times1=0.6 ,
+  0.5\times0.2+0.5\times1=0.6 ,
   \label{eq:mix}
 \end{equation}
 so 60\% of the added days lie in the rarest 20\% of the tail and each lower fifth receives 10\%
 (Table~\ref{tab:tailmath}, Figure~\ref{fig:tailfocus}). Keeping half of the draws uniform means every part of the tail
-still receives new extremes. Each $q$ is turned back into a severity by inverse-transform sampling and capped:
-\begin{equation}
-  z=\min\!\Big(F_g^{-1}(q),\;0.999\,\sigma_g/|\xi_g|,\;1.5\max_{\text{real}} z_g\Big).
-  \label{eq:cap}
-\end{equation}
+still receives new extremes. Each $q$ is turned back into a severity $z$ by reading the fitted GPD backwards (the severity whose tail position is
+$q$), and capped so that it is never above 99.9\% of the GPD's ceiling $\sigma_g/|\xi_g|$ nor above 1.5 times the
+largest real severity of that season.
 The \emph{plain} version of each method instead uses severities as they occur in the real extremes (no EVT); a further
-variant draws $q\sim\mathcal{U}(0,1)$, i.e.\ the fitted GPD as it is.
+variant draws tail positions evenly between 0 and 1, i.e.\ the fitted GPD as it is.
 
 \begin{table}[H]
 \centering
@@ -1183,14 +1174,14 @@ conditional diffusion model was built for this project.
 \hline
  & \textbf{TVAE} & \textbf{CTGAN} & \textbf{Conditional DDPM}\\ \hline
 Type & Variational autoencoder & Conditional Wasserstein GAN & Denoising diffusion model\\ \hline
-Input handling & Mode-specific normalisation (Gaussian mixture, $\le$10 modes); season one-hot & Same as TVAE & Quantile transform of each feature to $\mathcal{N}(0,1)$\\ \hline
-Network & Encoder $128\!\to\!128$ (ReLU) to $\mu,\log\sigma^2\in\mathbb{R}^{128}$; decoder $128\!\to\!128$ (ReLU) & Generator: 2 residual layers of 256 (BatchNorm, ReLU); critic: $256\!\to\!256$ (LeakyReLU 0.2, dropout 0.5), pac 10 & Input, time and condition embeddings to 512; 4 residual blocks (LayerNorm, $512\!\to\!1024\!\to\!512$, SiLU); output 49\\ \hline
+Input handling & Mode-specific normalisation (Gaussian mixture, $\le$10 modes); season one-hot & Same as TVAE & Quantile transform of each feature to a standard normal\\ \hline
+Network & Encoder $128\!\to\!128$ (ReLU) to a 128-number code; decoder $128\!\to\!128$ (ReLU) & Generator: 2 residual layers of 256 (BatchNorm, ReLU); critic: $256\!\to\!256$ (LeakyReLU 0.2, dropout 0.5), pac 10 & Input, time and condition embeddings to 512; 4 residual blocks (LayerNorm, $512\!\to\!1024\!\to\!512$, SiLU); output 49\\ \hline
 Latent / noise & 128-d code & 128-d noise + season condition & 49-d noise, 1{,}000 steps\\ \hline
 Conditioning & None & Season (training-by-sampling) & Season and severity $z$, classifier-free\\ \hline
 Loss & ELBO: reconstruction ($\times2$) + KL & WGAN-GP + condition cross-entropy & MSE on the added noise\\ \hline
 Optimiser & Adam, weight decay $10^{-5}$ & Adam, $2\!\times\!10^{-4}$, $\beta=(0.5,0.9)$ & AdamW, $10^{-3}$, cosine decay, EMA 0.999\\ \hline
 Training & 300 epochs, batch 500 & 300 epochs, batch 500 & 15{,}000 steps, batch 1{,}024\\ \hline
-New sample & Code $\sim\mathcal{N}(0,I)\to$ decoder & Noise + season $\to$ generator & 50 DDIM steps, guidance $w=2$\\ \hline
+New sample & Random code $\to$ decoder & Noise + season $\to$ generator & 50 DDIM steps, guidance $w=2$\\ \hline
 Source & Xu et al.~\cite{xu2019ctgan} & Xu et al.~\cite{xu2019ctgan} & Ho et al.~\cite{ho2020ddpm}; built here\\ \hline
 \end{tabularx}
 \end{table}
@@ -1198,14 +1189,10 @@ Source & Xu et al.~\cite{xu2019ctgan} & Xu et al.~\cite{xu2019ctgan} & Ho et al.
 \subsection{TVAE}
 Each continuous column is normalised \emph{per mode}: a variational Gaussian mixture splits it into up to ten modes and
 a value is coded by its mode and its position within it; the season is one-hot. The encoder (two fully connected layers
-of 128 units, ReLU) outputs the mean $\mu$ and log-variance of a 128-dimensional code, sampled as
-$\mathbf{h}=\mu+\sigma\odot\epsilon$, $\epsilon\sim\mathcal{N}(0,I)$. The decoder (two layers of 128, ReLU) rebuilds the
-row. Training maximises the evidence lower bound
-\begin{equation}
-  \mathcal{L}_{\text{VAE}}=\mathbb{E}_{q(\mathbf{h}|x)}\big[\log p(x|\mathbf{h})\big]-
-  \mathrm{KL}\big(q(\mathbf{h}|x)\,\|\,\mathcal{N}(0,I)\big),
-\end{equation}
-with the reconstruction term weighted by 2. A new day is made by decoding a code drawn from $\mathcal{N}(0,I)$
+of 128 units, ReLU) turns a row into a 128-number code, drawn with a little randomness around a learned centre. The
+decoder (two layers of 128, ReLU) rebuilds the row from the code. Training balances two goals: rebuild each row well
+(weighted by 2), and keep the codes close to a standard bell curve so that any random code decodes to a sensible row.
+A new day is made by decoding a random code
 (Figure~\ref{fig:arch-tvae}). Because the reconstruction rewards typical rows, its extremes are mostly mild.
 
 \begin{figure}[H]
@@ -1214,11 +1201,11 @@ with the reconstruction term weighted by 2. A new day is made by decoding a code
 \node[io] (x) {Real day\\49 + season};
 \node[blk,right=of x] (t) {Mode-specific\\normalisation};
 \node[nn,right=of t] (e) {Encoder\\$128\to128$};
-\node[lat,right=of e] (h) {Code $\mathbf{h}$\\$\mu,\sigma\in\mathbb{R}^{128}$};
+\node[lat,right=of e] (h) {Code\\128 numbers};
 \node[nn,right=of h] (d) {Decoder\\$128\to128$};
 \node[io,right=of d] (y) {Rebuilt day};
 \foreach \a/\b in {x/t,t/e,e/h,h/d,d/y} \draw[arr] (\a) -- (\b);
-\node[io,below=6mm of h] (n) {New day: $\mathbf{h}\sim\mathcal{N}(0,I)$};
+\node[io,below=6mm of h] (n) {New day: random code};
 \draw[arr,dashed] (n) -| (d);
 \end{tikzpicture}
 \caption{TVAE architecture}
@@ -1230,12 +1217,9 @@ The data are prepared as for TVAE. The generator takes 128-dimensional Gaussian 
 vector (the one-hot code of a chosen season) and passes it through two residual layers of 256 units (linear,
 BatchNorm, ReLU, output concatenated with the input); scalar outputs use $\tanh$ and mode and season indicators use
 Gumbel-softmax. The critic sees ten rows at once (\emph{PacGAN}, pac 10) through two layers of 256 units (LeakyReLU 0.2,
-dropout 0.5). Training uses the Wasserstein loss with gradient penalty~\cite{gulrajani2017wgangp},
-\begin{equation}
-  \mathcal{L}_{D}=\mathbb{E}[D(\tilde x)]-\mathbb{E}[D(x)]+\lambda\,\mathbb{E}\big[(\lVert\nabla_{\hat x}D(\hat x)\rVert_2-1)^2\big],
-  \qquad \lambda=10,
-\end{equation}
-plus a cross-entropy term that makes the generator respect the requested season. \emph{Training-by-sampling} draws
+dropout 0.5). Training uses the Wasserstein loss with gradient penalty (WGAN-GP)~\cite{gulrajani2017wgangp}: the critic gives each
+row a realness score instead of a yes/no answer, and a penalty (weight 10) keeps that score changing smoothly, which
+makes training more stable. A further term that makes the generator respect the requested season. \emph{Training-by-sampling} draws
 the condition so that rare seasons are seen often enough (Figure~\ref{fig:arch-ctgan}).
 
 \begin{figure}[H]
@@ -1256,28 +1240,26 @@ the condition so that rare seasons are seen often enough (Figure~\ref{fig:arch-c
 
 \subsection{Conditional diffusion model}
 Each of the 49 features is first mapped to a standard normal by a quantile transform. The forward process adds
-Gaussian noise over $T=1{,}000$ steps with a cosine schedule~\cite{nichol2021improved},
-$x_\tau=\sqrt{\bar\alpha_\tau}\,x_0+\sqrt{1-\bar\alpha_\tau}\,\epsilon$. The denoiser $\epsilon_\theta(x_\tau,\tau,c)$
-embeds the noisy row (linear, $49\to512$), the step $\tau$ (128 sinusoidal features, then $512$, SiLU, $512$) and the
+Gaussian noise over 1{,}000 steps, with the amount at each step set by a cosine schedule~\cite{nichol2021improved}.
+The denoising network is given the noisy row, the step number and the condition, and predicts the noise that was
+added. It embeds the noisy row (linear, $49\to512$), the step number (128 sinusoidal features, then $512$, SiLU, $512$) and the
 condition $c$ (season one-hot, severity $z$ and a presence flag; 6 values, then $512$, SiLU, $512$), adds the three
-embeddings and applies four pre-norm residual blocks $x\leftarrow x+W_2\,\mathrm{SiLU}(W_1\,\mathrm{LN}(x))$ with widths
+embeddings and applies four residual blocks (each normalises its input, widens it, applies SiLU, narrows it back and adds the input back) with widths
 $512\to1024\to512$, followed by LayerNorm and a linear layer back to 49 values (Figure~\ref{fig:arch-ddpm}); it has
-about 4.85 million parameters. Training minimises $\lVert\epsilon-\epsilon_\theta(x_\tau,\tau,c)\rVert^2$ with the
+about 4.85 million parameters. Training minimises the squared error of the predicted noise, with the
 condition dropped (set to zero) 10\% of the time, AdamW (learning rate $10^{-3}$, weight decay $10^{-4}$, cosine decay),
 gradient clipping at 1, an exponential moving average of the weights (0.999), 15{,}000 steps and batches of 1{,}024.
 New days are made from pure noise in 50 deterministic DDIM steps~\cite{song2021ddim} with classifier-free
-guidance~\cite{ho2022cfg},
-\begin{equation}
-  \tilde\epsilon=(1+w)\,\epsilon_\theta(x_\tau,\tau,c)-w\,\epsilon_\theta(x_\tau,\tau,\varnothing),\qquad w=2,
-\end{equation}
-where $c$ holds the season and the EVT severity of Eq.~\ref{eq:cap}; the result is mapped back by the inverse quantile
+guidance~\cite{ho2022cfg}: at each step the network's noise prediction with the condition is pushed away from its
+prediction without it (guidance strength 2), so the new day follows the requested season and EVT severity
+(Section~\ref{sec:evtmodel}) more closely; the result is mapped back by the inverse quantile
 transform.
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[node distance=4mm]
-\node[io] (x) {Noisy day $x_\tau$ (49)};
-\node[io,below=2mm of x] (t) {Step $\tau$: 128 sine features};
+\node[io] (x) {Noisy day (49 values)};
+\node[io,below=2mm of x] (t) {Step number: 128 sine features};
 \node[lat,below=2mm of t] (c) {Condition: season, $z$};
 \node[blk,right=8mm of t,minimum width=8mm] (p) {$+$};
 \node[nn,right=of p] (b) {4 residual blocks\\LN, $512\to1024\to512$, SiLU};
@@ -1433,7 +1415,7 @@ real extreme instead of one lowered heatwave-start skill (0.222 to 0.197).
 \textbf{Severities requested} & \textbf{PR-AUC} & \textbf{Runs better than real severities}\\ \hline
 Real data only (no synthetic days) & 0.411 & --\\ \hline
 Copied from real extremes (plain) & 0.482 & --\\ \hline
-Fitted GPD as it is, $q\sim\mathcal{U}(0,1)$ & 0.462 & 1/5\\ \hline
+Fitted GPD as it is (no tail focus) & 0.462 & 1/5\\ \hline
 \rowcolor{rowhl}GPD with tail focus (Eq.~\ref{eq:mix}) & \textbf{0.549} & 5/5\\ \hline
 \end{tabular}
 \end{table}
