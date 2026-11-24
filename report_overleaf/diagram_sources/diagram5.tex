@@ -1,0 +1,31 @@
+\documentclass[12pt,border=1pt]{standalone}
+\usepackage[T1]{fontenc}
+\IfFileExists{newtxtext.sty}{\usepackage{newtxtext,newtxmath}}{\usepackage{mathptmx}}
+\usepackage{amsmath,amssymb}
+\usepackage[table]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,decorations.pathreplacing}
+\tikzset{blk/.style={draw=black!55,rounded corners=2pt,align=center,font=\footnotesize,inner sep=4pt,minimum height=1.05cm},
+         nn/.style={blk,fill=orange!12,draw=orange!70!black},
+         lat/.style={blk,fill=blue!8,draw=blue!60!black},
+         io/.style={blk,fill=black!3},
+         arr/.style={-{Stealth[length=2.2mm]},thick,draw=black!65}}
+\definecolor{capblue}{RGB}{47,84,150}
+\definecolor{linkblue}{RGB}{17,85,204}
+\definecolor{ganttA}{RGB}{11,90,110}
+\definecolor{ganttB}{RGB}{20,150,160}
+\definecolor{rowhl}{RGB}{253,236,224}
+\definecolor{rowhl2}{RGB}{224,244,238}
+\begin{document}
+\begin{tikzpicture}[node distance=4mm]
+\node[io] (x) {Real day\\49 + season};
+\node[blk,right=of x] (t) {Mode-specific\\normalisation};
+\node[nn,right=of t] (e) {Encoder\\$128\to128$};
+\node[lat,right=of e] (h) {Code\\128 numbers};
+\node[nn,right=of h] (d) {Decoder\\$128\to128$};
+\node[io,right=of d] (y) {Rebuilt day};
+\foreach \a/\b in {x/t,t/e,e/h,h/d,d/y} \draw[arr] (\a) -- (\b);
+\node[io,below=6mm of h] (n) {New day: random code};
+\draw[arr,dashed] (n) -| (d);
+\end{tikzpicture}
+\end{document}

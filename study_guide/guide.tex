@@ -1,10 +1,11 @@
 \documentclass[12pt,a4paper]{report}
 
 \usepackage[T1]{fontenc}
-\IfFileExists{newtxtext.sty}{\usepackage{newtxtext,newtxmath}}{\usepackage{mathptmx}}
+\usepackage{amsmath}
+\IfFileExists{newtxmath.sty}{\usepackage{newtxtext,newtxmath}}{\usepackage{amssymb}\usepackage{mathptmx}}
 \usepackage{microtype}
 \usepackage[a4paper,left=25mm,right=25mm,top=25mm,bottom=25mm]{geometry}
-\usepackage{amsmath,amssymb,bm}
+\usepackage{bm}
 \usepackage{graphicx,float,booktabs,array,tabularx,longtable,multirow}
 \usepackage[table]{xcolor}
 \usepackage{caption}
