@@ -137,7 +137,7 @@
 \vspace{0.5cm}
 {\fontsize{14}{17}\selectfont \ReportSubtitle\par}
 \vspace{0.8cm}
-{\bfseries\Large Major Technical Project - II\par}
+{\bfseries\Large Major Technical Project - I\par}
 {\large (\ReportKind)\par}
 \vspace{0.8cm}
 {\large by\par}
@@ -161,7 +161,7 @@
 \chapter*{Certificate}
 This is to certify that the work contained in the project report titled
 \textbf{``\ReportTitle,''} submitted by \StudentName\ at the Indian Institute of Technology Mandi for the course
-Major Technical Project-II, is a record of bonafide research work carried out under my direct
+Major Technical Project-I, is a record of bonafide research work carried out under my direct
 supervision and guidance.
 
 \vspace{3.5cm}
@@ -1135,8 +1135,8 @@ extreme (label 1) above its cell's threshold.
 Each method adds one synthetic extreme per real extreme (29{,}604 rows) and is used plain and with EVT tail focus
 (Table~\ref{tab:methods}). Generators that take a severity as input are asked for EVT severities directly; the others
 generate a pool ten times larger, a severity ``judge'' model scores each row, and rows are selected to match the EVT
-target. Every synthetic row is placed on a real grid cell and repaired so that, for example, the minimum temperature
-never exceeds the maximum. In numbers: each generator is trained on the 29{,}604 real extreme rows of the training
+target. Every synthetic row is placed on a real grid cell and cut to valid ranges so that, for example, the minimum
+temperature never exceeds the maximum. In numbers: each generator is trained on the 29{,}604 real extreme rows of the training
 years (TVAE about 19 minutes, CTGAN about 24, diffusion about 30, on a free Colab T4 GPU); TVAE and CTGAN generate a
 pool of 296{,}040 rows (ten per real extreme); after clean-up, 88{,}812 rows (three per real extreme) are kept per set,
 at random (plain) or by EVT selection; and for each seed 29{,}604 of them are drawn and added to the
@@ -1219,7 +1219,7 @@ BatchNorm, ReLU, output concatenated with the input); scalar outputs use $\tanh$
 Gumbel-softmax. The critic sees ten rows at once (\emph{PacGAN}, pac 10) through two layers of 256 units (LeakyReLU 0.2,
 dropout 0.5). Training uses the Wasserstein loss with gradient penalty (WGAN-GP)~\cite{gulrajani2017wgangp}: the critic gives each
 row a realness score instead of a yes/no answer, and a penalty (weight 10) keeps that score changing smoothly, which
-makes training more stable. A further term that makes the generator respect the requested season. \emph{Training-by-sampling} draws
+makes training more stable. A further term makes the generator respect the requested season. \emph{Training-by-sampling} draws
 the condition so that rare seasons are seen often enough (Figure~\ref{fig:arch-ctgan}).
 
 \begin{figure}[H]
