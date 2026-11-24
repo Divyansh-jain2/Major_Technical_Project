@@ -76,6 +76,7 @@
 
 % sections "1.  Brief Introduction"; sub-sections unnumbered and bold
 \renewcommand{\thesection}{\arabic{section}}
+\makeatletter\renewcommand{\p@section}{\thechapter.}\makeatother   % references read "Section 6.4"
 \titleformat{\section}{\normalfont\bfseries\fontsize{14}{17}\selectfont}{\hspace*{0.6em}\thesection.}{1.2em}{}
 \titleformat{\subsection}{\normalfont\bfseries\fontsize{12.5}{15}\selectfont}{}{0pt}{}
 \titleformat{\subsubsection}{\normalfont\bfseries\itshape}{}{0pt}{}
@@ -194,12 +195,13 @@ extreme days are rare: only about one day in a hundred at a given place, and the
 This project treats these days as the \emph{tail} of the temperature distribution, models that tail with Extreme
 Value Theory (EVT), and uses the model to decide which extra extreme days are added to the training data of a fixed
 classifier. The task is to predict whether tomorrow will be an extreme heat day at each of 529 ERA5-Land grid cells
-(1981--2025) using LightGBM. Six ways of adding extreme days were compared over five training seeds: three SMOTE variants,
+(1981--2025) using LightGBM. Six ways of adding extreme days were compared over five training seeds (three interpolation methods and three generators): three SMOTE variants,
 a GAN (CTGAN), a VAE (TVAE) and a conditional diffusion model, the last three each with and without \emph{EVT tail focus}, which places 60\% of the
 added days in the most severe 20\% of the fitted tail. EVT tail focus improved every generator. CTGAN and TVAE with
 EVT tail focus raised the skill on the most severe days from 0.441 to 0.601 PR-AUC and beat a persistence baseline on
-overall skill. A control experiment showed that the EVT emphasis works even without a generator, while generators add
-extra skill on the most severe days. The most realistic synthetic data was not the most useful.
+overall skill. A control experiment showed that the EVT emphasis works even without a generator: EVT-selected copies of real
+extremes gave the best scores on all days and on onset days, while generators added extra skill on the most severe
+days. Every kind of added data except these copies slightly lowered skill on onset days. The most realistic synthetic data was not the most useful.
 
 % =============================================================================
 %  CONTENTS AND LISTS
@@ -217,15 +219,26 @@ extra skill on the most severe days. The most realistic synthetic data was not t
 \hline
 ADASYN & Adaptive Synthetic Sampling \\ \hline
 AUC & Area Under the Curve \\ \hline
+CHIRPS & Climate Hazards Group Infrared Precipitation with Stations \\ \hline
+CSI & Critical Success Index \\ \hline
 CTGAN & Conditional Tabular Generative Adversarial Network \\ \hline
+DDIM & Denoising Diffusion Implicit Model \\ \hline
+DDPM & Denoising Diffusion Probabilistic Model \\ \hline
+ECMWF & European Centre for Medium-Range Weather Forecasts \\ \hline
 ERA5 & Fifth-generation ECMWF Reanalysis \\ \hline
 EVT & Extreme Value Theory \\ \hline
+FAR & False-Alarm Rate \\ \hline
+GADM & Database of Global Administrative Areas \\ \hline
 GAN & Generative Adversarial Network \\ \hline
 GPD & Generalized Pareto Distribution \\ \hline
+GSOD & Global Surface Summary of the Day (NOAA) \\ \hline
+HSS & Heidke Skill Score \\ \hline
 IMD & India Meteorological Department \\ \hline
 LightGBM & Light Gradient Boosting Machine \\ \hline
+MLP & Multilayer Perceptron \\ \hline
 NWP & Numerical Weather Prediction \\ \hline
 PR-AUC & Area Under the Precision--Recall Curve \\ \hline
+ROC & Receiver Operating Characteristic \\ \hline
 SDV & Synthetic Data Vault \\ \hline
 SMOTE & Synthetic Minority Over-sampling Technique \\ \hline
 SRTM & Shuttle Radar Topography Mission \\ \hline
@@ -265,7 +278,7 @@ as frequent as in 1981--2010.
   \item \textbf{Local extremes:} each cell and season has its own threshold.
   \item \textbf{EVT decides where to add data:} extra examples go where the tail is thinnest.
   \item \textbf{Fair comparison:} one fixed classifier, every synthetic day placed on a real cell and cut to valid ranges, choices made on a
-        validation period, five training seeds.
+        validation period (one early exception is listed in Section~\ref{sec:limits}), five training seeds.
 \end{enumerate}
 
 Figure~\ref{fig:pipeline} shows the four stages of the study, and Table~\ref{tab:numbers} explains every number
@@ -385,7 +398,7 @@ classifiers such as gradient-boosted trees, balancing seldom helps~\cite{elor202
 By the Pickands--Balkema--de Haan theorem~\cite{pickands1975,balkema1974}, the excess $Y=X-u$ over a high threshold $u$
 follows a Generalized Pareto Distribution (GPD)~\cite{coles2001}:
 \begin{equation}
-  F_{\xi,\sigma}(y)=1-\left(1+\frac{\xi y}{\sigma}\right)^{-1/\xi},\qquad y>0 .
+  F_{\xi,\sigma}(y)=1-\left(1+\frac{\xi y}{\sigma}\right)^{-1/\xi},\qquad 0<y<\infty\ (\xi\ge0),\quad 0<y<-\sigma/\xi\ (\xi<0) .
   \label{eq:gpd}
 \end{equation}
 Here $F_{\xi,\sigma}(y)$ is the chance that an excess is at most $y$, the scale $\sigma$ sets how spread out the excesses are, and the shape $\xi$ sets the tail: $\xi<0$ bounded (expected for temperature), $\xi=0$ exponential, $\xi>0$ heavy.
@@ -570,7 +583,8 @@ rain shadow: little monsoon rain, snow mainly from western disturbances, very co
 \begin{itemize}
 \item The same temperature is ordinary in Una and extreme in Kaza, so a single national rule cannot describe extremes
 everywhere. IMD itself uses different heatwave rules for plains (at least 40\,$^\circ$C) and hilly regions (at least
-30\,$^\circ$C), together with a departure of 4.5\,$^\circ$C or more from normal~\cite{imdheatdef}. This project goes
+30\,$^\circ$C), together with a departure from normal of 4.5--6.4\,$^\circ$C (more than 6.4\,$^\circ$C is a severe heat
+wave)~\cite{imdheatdef}, the same rule as quoted in Chapter~2. This project goes
 one step further and uses the 99th percentile of each cell in each season (Section~\ref{sec:features}).
 \item Seasons behave differently: pre-monsoon extremes are dry heat; monsoon extremes come in breaks of the monsoon;
 winter extremes are warm spells between western disturbances. That is why thresholds and the EVT fit are computed per
@@ -640,7 +654,7 @@ GADM 4.1 & Database of administrative boundaries & Vector outline & Which cells 
 \subsection{Why ERA5-Land, and the Data Sets Not Used}
 The data had to meet five needs. (1)~\emph{Long record}: extreme days are about 1\% of days, so decades are needed to
 have enough of them, plus a fixed 1981--2010 baseline and unseen test years up to 2025. (2)~\emph{Fine grid}:
-Himachal rises from 300\,m to over 5\,km, and a valley and a ridge 20\,km apart have very different climates.
+Himachal rises from 300\,m to over 6\,km, and a valley and a ridge 20\,km apart have very different climates.
 (3)~\emph{No gaps}: every cell must have every day. (4)~\emph{Many variables}: humidity, soil moisture, radiation and
 rain, not only temperature. (5)~\emph{Free and still updated}. ERA5-Land is the only option found that meets all five.
 Table~\ref{tab:datasets} lists the other data sets that were considered.
@@ -855,7 +869,7 @@ day.
 \subsection{The 57 predictors}
 Each row describes one cell on one day $D$ with 57 numbers (Table~\ref{tab:predictors}), all known on day $D$: the place
 (4), the weather of the last three days (27), today's departure from normal (2), summaries of the last one to four
-weeks (16), and the distance between recent temperatures and tomorrow's threshold (8). Figure~\ref{fig:timeline} shows
+weeks (16; two counters look further back, up to 60 and 365 days), and the distance between recent temperatures and tomorrow's threshold (8). Figure~\ref{fig:timeline} shows
 which days each group looks at. The generators (Section~\ref{sec:arch}) produce the first 49 predictors; the last
 eight are always recomputed from the cell's own threshold.
 
@@ -899,7 +913,7 @@ $T^{\max}$ anomalies in that season.}\label{tab:predictors}\\
 \rowcolor{black!6}\multicolumn{5}{|l|}{\textbf{C. Today compared with normal}} \\ \hline
 \texttt{tmax\_anom\_l0} & Today's maximum temperature minus its normal & $^\circ$C & $D$ & 1\\ \hline
 \texttt{tmin\_anom\_l0} & Today's minimum temperature minus its normal & $^\circ$C & $D$ & 1\\ \hline
-\rowcolor{black!6}\multicolumn{5}{|l|}{\textbf{D. The last one to four weeks} (windows end on today)} \\ \hline
+\rowcolor{black!6}\multicolumn{5}{|l|}{\textbf{D. The last one to four weeks} (windows end on today; two counters look back up to 60 and 365 days)} \\ \hline
 \texttt{tmax\_anom\_m7, m14, m30} & Mean maximum-temperature anomaly over the last 7, 14 and 30 days & $^\circ$C & up to
   30 days & 3\\ \hline
 \texttt{tmin\_anom\_m7, m30} & Mean minimum-temperature anomaly over the last 7 and 30 days & $^\circ$C & up to 30
@@ -922,9 +936,9 @@ $T^{\max}$ anomalies in that season.}\label{tab:predictors}\\
 \texttt{dist\_l0..l2} & $T^{\max}$ of the day minus tomorrow's threshold $u$ (negative = below) & $^\circ$C & $D$,
   $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
 \texttt{dist\_std\_l0..l2} & The same distance divided by $s$ & -- (ratio) & $D$, $D\!-\!1$, $D\!-\!2$ & 3\\ \hline
-\texttt{dist\_trend} & \texttt{dist\_l0} minus \texttt{dist\_l1}: is the gap to the threshold closing? & $^\circ$C &
+\texttt{dist\_trend} & \texttt{dist\_l0} minus \texttt{dist\_l1}: is the gap to the threshold closing? (Both use the same threshold, so this equals \texttt{tmax\_change}.) & $^\circ$C &
   $D$, $D\!-\!1$ & 1\\ \hline
-\texttt{tmax\_change} & Today's maximum temperature minus yesterday's & $^\circ$C & $D$, $D\!-\!1$ & 1\\ \hline
+\texttt{tmax\_change} & Today's maximum temperature minus yesterday's (identical to \texttt{dist\_trend}; computed in the same step) & $^\circ$C & $D$, $D\!-\!1$ & 1\\ \hline
 \rowcolor{rowhl}\multicolumn{4}{|r|}{\textbf{Total: 4 + 27 + 2 + 16 + 8}} & \textbf{57}\\ \hline
 \end{longtable}}
 
@@ -968,8 +982,9 @@ For each season, and for the whole year, a GPD is fitted by maximum likelihood t
 1981--2010, pooling all cells, with the location fixed at zero. Extremes arrive as events (on 6~October~1983, 522 of the
 529 cells were extreme together), so 95\% intervals for $\xi$ come from 100 bootstrap refits that resample
 \emph{whole days}. Refitting only above the 25th and 50th percentiles of $z$ gave similar shapes, and quantile--quantile
-plots agree with the fit. All heat tails are bounded or nearly so (Table~\ref{tab:gpd}, Figure~\ref{fig:gpdshape}). For
-$\xi<0$ the tail has a finite upper end, the \emph{ceiling} $z^{*}=\sigma/|\xi|$.
+plots agree with the fit. Winter, pre-monsoon, monsoon and the whole year have clearly bounded tails: their whole 95\% interval for $\xi$ is
+negative (Table~\ref{tab:gpd}, Figure~\ref{fig:gpdshape}). For $\xi<0$ the tail has a finite upper end, the
+\emph{ceiling} $z^{*}=\sigma/|\xi|$. The post-monsoon tail is consistent with a bound but not shown to be one.
 
 \begin{table}[H]
 \centering
@@ -994,9 +1009,10 @@ Post-monsoon & $+0.262$ & $+0.070$ & $[-0.177,\,+0.231]$\\ \hline
 \label{fig:gpdshape}
 \end{figure}
 
-Every season has $\xi<0$ or $\xi\approx0$: heat in Himachal has an upper limit, as expected for temperature. The
-post-monsoon raw shape ($+0.26$) looked heavy-tailed only because cells of very different variability were mixed;
-standardising removes this ($+0.07$, interval including zero).
+Winter, pre-monsoon and monsoon have $\xi<0$: heat there has an upper limit, as expected for temperature. The
+post-monsoon raw shape ($+0.26$) looked heavy-tailed partly because cells of very different variability were mixed;
+standardising brings it to $+0.07$, but its interval ($-0.18$ to $+0.23$) still allows a tail without a ceiling, so
+no bound is claimed for that season.
 
 \subsection{Tail position and EVT tail focus}
 The fitted GPD $F_g$ of season $g$ gives every extreme a \emph{tail position} $q=F_g(z)\in[0,1)$: $q=0.9$ means more
@@ -1011,7 +1027,8 @@ so 60\% of the added days lie in the rarest 20\% of the tail and each lower fift
 (Table~\ref{tab:tailmath}, Figure~\ref{fig:tailfocus}). Keeping half of the draws uniform means every part of the tail
 still receives new extremes. Each $q$ is turned back into a severity $z$ by reading the fitted GPD backwards (the severity whose tail position is
 $q$), and capped so that it is never above 99.9\% of the GPD's ceiling $\sigma_g/|\xi_g|$ nor above 1.5 times the
-largest real severity of that season.
+largest real severity of that season. For the post-monsoon season the fitted $\xi$ is positive, so the GPD has no
+ceiling and only the second limit applies ($1.5\times1.79=2.69$).
 The \emph{plain} version of each method instead uses severities as they occur in the real extremes (no EVT); a further
 variant draws tail positions evenly between 0 and 1, i.e.\ the fitted GPD as it is.
 
@@ -1041,8 +1058,10 @@ An added day is neither placed at random nor by hand. (1)~Its \emph{season} is d
 real extremes. (2)~Its \emph{location} (latitude, longitude) is part of the generated row, learned from where real
 extremes occur. (3)~The location is snapped to the nearest of the 529 cells by a nearest-neighbour search, and the row
 takes that cell's real elevation and slope. (4)~The eight threshold-distance features are recomputed from that cell's
-own threshold $u_{c,g}$, so the label ``extreme'' is consistent with where the day now sits. Every added row is an
-extreme (label 1) above its cell's threshold.
+own threshold $u_{c,g}$, so the label ``extreme'' is consistent with where the day now sits. Every added row has label 1.
+Like a real row, it holds the predictors of day $D$; its severity $z$ belongs to the next day $D+1$, which the row does
+not contain. A synthetic row of severity $z$ therefore stands for \emph{the day before} an extreme heat day of that
+severity: the diffusion model is asked for $z$ directly, and for TVAE and CTGAN the judge estimates it from the row.
 
 \section{Generation Methods}
 Each method adds one synthetic extreme per real extreme (29{,}604 rows) and is used plain and with EVT tail focus
@@ -1053,7 +1072,8 @@ temperature never exceeds the maximum. In numbers: each generator is trained on 
 years (TVAE about 19 minutes, CTGAN about 24, diffusion about 30, on a free Colab T4 GPU); TVAE and CTGAN generate a
 pool of 296{,}040 rows (ten per real extreme); after clean-up, 88{,}812 rows (three per real extreme) are kept per set,
 at random (plain) or by EVT selection; and for each seed 29{,}604 of them are drawn and added to the
-$\approx$2.9 million real training rows.
+$\approx$2.9 million real training rows. The diffusion model produces 256{,}428 rows per set (8.7 per real extreme),
+from which 29{,}604 are drawn in the same way for each seed.
 
 \begin{table}[H]
 \centering
@@ -1164,7 +1184,7 @@ the bins and seasons match the EVT target (60\% of the mass in the top four bins
 \section{Classifier and Evaluation}
 \label{sec:metricsdef}
 LightGBM~\cite{ke2017lightgbm} is identical for every method. Because 98\% of days are normal, accuracy is
-uninformative; we report PR-AUC (average precision) on all days, on \emph{onset} days (heatwave starts) and on
+uninformative; we report PR-AUC (average precision) on all days, on \emph{onset} days (rows where today's maximum is still below tomorrow's threshold) and on
 \emph{severe} days (the 10\% most severe extremes), plus precision and recall. Table~\ref{tab:metrics} defines every
 measure; Section~\ref{sec:allmetrics} compares the methods on all of them and explains why PR-AUC is the main
 measure. In Table~\ref{tab:metrics}, a \emph{hit} is an extreme day that received a warning, a \emph{miss} an extreme day without one, and a
@@ -1184,18 +1204,20 @@ False-alarm rate & false alarms / all normal days & 0--1 \\ \hline
 CSI & hits / (hits + misses + false alarms), the critical success index of weather forecasting & 0--1 \\ \hline
 PR-AUC (average precision) & Area under the precision--recall curve: the precision averaged over all warning cut-offs,
   weighted by the gain in recall & 0--1; random = share of extreme days ($\approx$0.02) \\ \hline
-PR-AUC, onset days & PR-AUC computed only on rows where today's maximum temperature is still below tomorrow's threshold; the extreme days among them are first days of a heatwave & as above \\ \hline
-PR-AUC, severe days & PR-AUC computed on all normal days plus only the 10\% most severe extreme days (largest standardised excess $z$); the other extreme days are left out & as above \\ \hline
+PR-AUC, onset days & PR-AUC computed only on rows where today's maximum temperature is still below tomorrow's threshold; the extreme days among them are the first day of a hot spell (not necessarily an IMD heat wave; it can be a single day) & as above \\ \hline
+PR-AUC, severe days & PR-AUC computed on all normal days plus only the 10\% most severe extreme days (largest standardised excess $z$, taken over all test extremes pooled across seasons); the other extreme days are left out & as above \\ \hline
 Warning cut-off & The probability above which a warning is given; chosen to maximise F1 on 2011--2015 & -- \\ \hline
 \end{tabularx}
 \end{table} Each method is trained with five seeds;
-differences are tested by resampling whole test months. The baseline is \emph{persistence}: ``tomorrow will be like
-today''.
+differences are tested by resampling whole test months (Section~\ref{sec:paired}). The baseline is
+\emph{persistence}: ``tomorrow will be like today'', scored with today's distance to tomorrow's threshold
+(\texttt{dist\_l0}) as its warning score, so that it can be ranked like a probability; this is why it has some skill on
+onset days, where today is still below the threshold.
 
 \textbf{Neural-network comparison.} A multilayer perceptron (three hidden layers of 256 units, SiLU, dropout 0.1,
 sigmoid output; inputs standardised and clipped to $\pm10$; binary cross-entropy; AdamW, learning rate $10^{-3}$;
 6 epochs, 2 seeds) was tried in an early run on the same inputs. On real data alone it scored about the same as LightGBM
-on all days (PR-AUC 0.597 vs 0.594) and better on the most severe days (0.576 vs 0.461, one seed). However, every
+on all days (PR-AUC 0.597 vs 0.594) and better on the most severe days (0.576 vs 0.461; the MLP was averaged over two seeds, LightGBM was a single seed in that run). However, every
 synthetic data set made the MLP worse on all three scores, while LightGBM gained on the most severe days (0.461
 to 0.580 with EVT-guided diffusion days); since this project tests what added extreme days do, LightGBM was kept.
 It also trains on a normal CPU, and tree ensembles are generally strong on tabular data~\cite{grinsztajn2022tree}.
@@ -1205,9 +1227,11 @@ It also trains on a normal CPU, and tree ensembles are generally strong on tabul
 \label{ch:results}
 % =============================================================================
 \section{Lessons from the First Experiments}
+\label{sec:lessons}
 \begin{itemize}
-  \item With real data alone, LightGBM was weaker than persistence on the most severe days (0.461 vs 0.565).
-  \item Too much synthetic data (8.7 per real extreme) hurt heatwave-onset skill; one per real extreme was best.
+  \item With real data alone, LightGBM was weaker than persistence on the most severe days (0.461 vs 0.565, a single
+        early run).
+  \item Too much synthetic data (8.7 per real extreme) hurt onset skill; one per real extreme was best.
   \item A single training run was misleading: one result reversed with other seeds, so all later results use five seeds.
   \item Drawing severities from the fitted GPD as it is gave no gain; focusing on the upper tail did.
 \end{itemize}
@@ -1220,12 +1244,14 @@ It also trains on a normal CPU, and tree ensembles are generally strong on tabul
 \small
 \begin{tabular}{|l|c|c|c|}
 \hline
-\textbf{Generator} & \makecell{\textbf{Raw rows}\\\textbf{breaking physics}} & \makecell{\textbf{Follows requested}\\\textbf{severity}} & \makecell{\textbf{Training}\\\textbf{time}} \\ \hline
-TVAE / CTGAN & 69--75\% & -- & 18--24 min \\ \hline
-Conditional diffusion & $\approx$0\%$^{*}$ & 0.64--0.67 (real: 0.78) & 30 min \\ \hline
+\textbf{Generator} & \makecell{\textbf{Raw rows}\\\textbf{breaking physics}} & \makecell{\textbf{Follows requested}\\\textbf{severity}$^{\dagger}$} & \makecell{\textbf{Training}\\\textbf{time}} \\ \hline
+TVAE / CTGAN & 69--75\% & -- & about 19--24 min \\ \hline
+Conditional diffusion & 0.0--0.2\%$^{*}$ & 0.62--0.67 (real: 0.78) & 30 min \\ \hline
 \end{tabular}
 
-\vspace{2pt}{\footnotesize $^{*}$ For the diffusion model only the temperature order was recorded: 0.0--0.2\% of rows needed reordering.}
+\vspace{2pt}{\footnotesize $^{*}$ For the diffusion model only the temperature order was recorded: 0.0--0.2\% of rows needed reordering.\\
+$^{\dagger}$ Spearman rank correlation between the requested severity and the judge's estimate of it; the value for
+held-out real extremes (0.78) is the best achievable.}
 \end{table}
 ``Raw rows breaking physics'' counts generated rows that broke at least one simple consistency rule (for example
 minimum above maximum temperature, humidity outside 0--100\%, negative rain) before the clean-up. TVAE and CTGAN
@@ -1248,26 +1274,39 @@ broke one in most rows. Only the diffusion model could be asked for a severity a
 
 \begin{table}[H]
 \centering
-\caption{Main results (average of five models, test 2016--2025, PR-AUC)}
+\caption{Main results (combined prediction of five seeds, test 2016--2025, PR-AUC)}
 \label{tab:rank}
 \small
 \begin{tabular}{|l|c|c|c|}
 \hline
-\textbf{Method} & \textbf{All days} & \textbf{Heatwave starts} & \textbf{Most severe days}\\ \hline
-Real data only & 0.599 & \textbf{0.235} & 0.441 \\ \hline
+\textbf{Method} & \textbf{All days} & \textbf{Onset days} & \textbf{Most severe days}\\ \hline
+Real data only & 0.599 & 0.235 & 0.441 \\ \hline
 SMOTE & 0.604 & 0.231 & 0.507 \\ \hline
 \rowcolor{rowhl} Diffusion + EVT tail & 0.609 & 0.228 & 0.579 \\
 \rowcolor{rowhl} TVAE + EVT tail & 0.610 & 0.220 & \textbf{0.601} \\
-\rowcolor{rowhl} CTGAN + EVT tail & \textbf{0.611} & 0.223 & \textbf{0.601} \\ \hline
+\rowcolor{rowhl} CTGAN + EVT tail & 0.611 & 0.223 & \textbf{0.601} \\ \hline
+\rowcolor{rowhl2} EVT-tail copies of real extremes (Section~\ref{sec:control}) & \textbf{0.613} & \textbf{0.239} & 0.530 \\ \hline
 Persistence (no model) & 0.586 & 0.191 & 0.565 \\ \hline
 \end{tabular}
 \end{table}
 
 \begin{itemize}
+  \item \textbf{Two kinds of number.} Tables~\ref{tab:rank} and~\ref{tab:allmetrics} score the \emph{combined}
+        prediction of the five seeds; Tables~\ref{tab:evtgain}, \ref{tab:ablation}, \ref{tab:other} and \ref{tab:step13}
+        give the \emph{mean of five separately scored runs}, which is a little lower. For example, real data only
+        scores 0.441 combined and 0.411 as a mean of runs on severe days; the 0.461 in Section~\ref{sec:lessons} is a
+        single early run.
   \item \textbf{EVT tail focus improved every generator} on average on all three scores (Figure~\ref{fig:evtgain}),
-        most consistently on heatwave starts; all three top methods on validation used it.
+        most consistently on onset days; all three top methods on validation used it.
+  \item \textbf{Added data costs a little onset skill.} Every augmented method scored below real data only on onset
+        days (0.220--0.231 vs 0.235; for CTGAN + EVT the loss appeared in 98\% of month resamples). Only EVT-tail
+        copies of real extremes raised it (0.239). The gain is on the most severe days.
+  \item \textbf{Best overall:} EVT-tail copies of real extremes have the best all-days and onset scores; CTGAN and
+        TVAE with EVT tail focus have the best severe-day score.
   \item \textbf{CTGAN and TVAE with EVT tail focus were best} on the most severe days (0.601 vs 0.441 for real data
-        only), and beat persistence on overall skill (0.611 vs 0.586). The top EVT-tail methods are statistically close.
+        only), and beat persistence on overall skill (0.611 vs 0.586). The top EVT-tail methods are close: CTGAN + EVT beat
+        diffusion + EVT on severe days in 92\% of month resamples and TVAE + EVT in 88\%, short of the 95\% used here
+        for a clear win (Section~\ref{sec:paired}).
   \item \textbf{Interpolation helps little:} SMOTE gave a small gain; Borderline-SMOTE and ADASYN none.
 \end{itemize}
 
@@ -1281,7 +1320,7 @@ of EVT (Table~\ref{tab:evtgain}).
 \small
 \begin{tabular}{|l|c|c|c|c|c|}
 \hline
-\textbf{Generator} & \textbf{Plain} & \textbf{EVT tail} & \textbf{Gain} & \textbf{Runs better} & \textbf{Heatwave starts}\\ \hline
+\textbf{Generator} & \textbf{Plain} & \textbf{EVT tail} & \textbf{Gain} & \textbf{Runs better} & \textbf{Onset days}\\ \hline
 Diffusion & 0.482 & 0.549 & +13.8\% & 5/5 & +1.9\% (4/5)\\ \hline
 TVAE & 0.514 & 0.583 & +13.6\% & 5/5 & +7.4\% (5/5)\\ \hline
 CTGAN & 0.554 & 0.581 & +4.9\% & 3/5 & +4.3\% (5/5)\\ \hline
@@ -1292,7 +1331,7 @@ CTGAN & 0.554 & 0.581 & +4.9\% & 3/5 & +4.3\% (5/5)\\ \hline
 \textbf{Which use of EVT helps.} Because the diffusion model takes a severity, it was used to compare ways of choosing
 severities with everything else fixed (Table~\ref{tab:ablation}). Sampling the fitted GPD as it is gave no gain over
 real severities, since most of its mass is mild extremes; focusing on its upper 20\% did. Adding 8.7 synthetic days per
-real extreme instead of one lowered heatwave-start skill (0.222 to 0.197).
+real extreme instead of one lowered onset skill (0.222 to 0.197).
 
 \begin{table}[H]
 \centering
@@ -1311,7 +1350,7 @@ Fitted GPD as it is (no tail focus) & 0.462 & 1/5\\ \hline
 
 \textbf{Other generators tried.} Three further generators were run in the same way: a Gaussian
 copula~\cite{patki2016sdv}, CopulaGAN and a conditional WGAN-GP built in this project. EVT tail focus improved them
-too (Table~\ref{tab:other}), so all six generators tested gained; they are left out of the main comparison for
+too (Table~\ref{tab:other}), so all six generators tried (the three main ones and these three) gained; they are left out of the main comparison for
 brevity.
 
 \begin{table}[H]
@@ -1322,22 +1361,55 @@ brevity.
 \begin{tabular}{|l|c|c|c|c|}
 \hline
 \textbf{Generator} & \textbf{Plain} & \textbf{EVT tail} & \textbf{Gain} & \textbf{Seeds better}\\ \hline
-CopulaGAN & 0.522 & 0.578 & +0.055 & 5/5 \\ \hline
-Gaussian copula & 0.507 & 0.546 & +0.039 & 4/5 \\ \hline
-Conditional WGAN-GP & 0.509 & 0.532 & +0.023 & 4/5 \\ \hline
+CopulaGAN & 0.522 & 0.578 & +10.6\% & 5/5 \\ \hline
+Gaussian copula & 0.507 & 0.546 & +7.7\% & 4/5 \\ \hline
+Conditional WGAN-GP & 0.509 & 0.532 & +4.5\% & 4/5 \\ \hline
 \end{tabular}
 \end{table}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.78\textwidth]{fig_realism.png}
-\caption{Realism of the synthetic extremes against their usefulness}
+\caption{Realism of the synthetic extremes against their usefulness. Realism is the detection AUC: how well a
+classifier tells synthetic extremes from real ones (0.5 = indistinguishable, 1 = always told apart).}
 \label{fig:realism}
 \end{figure}
 
 \textbf{Realism is not usefulness.} Diffusion produced the most realistic days, yet CTGAN and TVAE days---easy to tell
 apart from real ones---helped as much or more (Figure~\ref{fig:realism}). Where the extra days sit in the tail mattered
 more than how real they looked.
+
+\section{How Sure Are the Differences?}
+\label{sec:paired}
+Each comparison below resamples whole months of the test period 200 times (months are kept whole because hot days
+cluster in time) and counts how often the first method beats the second. A share of at least 95\% is treated as a
+clear win and at most 5\% as a clear loss.
+
+\begin{table}[H]
+\centering
+\caption{Paired comparisons of the combined five-seed models: mean difference in PR-AUC and share of 200 month
+resamples in which the first method is better}
+\label{tab:paired}
+\footnotesize
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Comparison} & \textbf{All days} & \textbf{Onset days} & \textbf{Most severe days}\\ \hline
+SMOTE vs real data only & +0.004 (71\%) & $-0.004$ (22\%) & +0.055 (96\%)\\ \hline
+TVAE + EVT vs real data only & +0.010 (79\%) & $-0.015$ (1\%) & +0.142 (100\%)\\ \hline
+CTGAN + EVT vs real data only & +0.010 (80\%) & $-0.012$ (2\%) & +0.144 (100\%)\\ \hline
+Diffusion + EVT vs real data only & +0.008 (77\%) & $-0.007$ (15\%) & +0.114 (100\%)\\ \hline
+TVAE: EVT tail vs plain & +0.016 (100\%) & +0.017 (100\%) & +0.063 (96\%)\\ \hline
+CTGAN: EVT tail vs plain & +0.002 (76\%) & +0.015 (100\%) & +0.004 (60\%)\\ \hline
+Diffusion: EVT tail vs plain & +0.007 (97\%) & +0.004 (94\%) & +0.045 (94\%)\\ \hline
+CTGAN + EVT vs persistence & +0.025 (99\%) & +0.031 (98\%) & +0.047 (92\%)\\ \hline
+EVT-tail copies vs random copies & +0.005 (96\%) & +0.001 (63\%) & +0.037 (100\%)\\ \hline
+CTGAN + EVT vs EVT-tail copies & $-0.003$ (34\%) & $-0.016$ (0\%) & +0.068 (93\%)\\ \hline
+\end{tabular}
+\end{table}
+
+The gain on the most severe days is clear for every generator with EVT tail focus. The small changes on all days are
+mostly not decisive, and the loss on onset days for the generators is clear. EVT tail focus clearly helped TVAE on
+all three scores and every generator on onset days; for CTGAN on severe days it was not decisive.
 
 % =============================================================================
 \section{All Evaluation Measures and the Choice of PR-AUC}
@@ -1435,6 +1507,7 @@ Goadrich~\cite{davis2006pr} showed that a method can dominate in ROC space witho
 \end{enumerate}
 
 \section{Control Experiment: Is a Generator Needed?}
+\label{sec:control}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth]{fig_step13.png}
@@ -1449,7 +1522,7 @@ Goadrich~\cite{davis2006pr} showed that a method can dominate in ROC space witho
 \small
 \begin{tabular}{|l|c|c|c|}
 \hline
-\textbf{Method} & \textbf{All days} & \textbf{Heatwave starts} & \textbf{Most severe days}\\ \hline
+\textbf{Method} & \textbf{All days} & \textbf{Onset days} & \textbf{Most severe days}\\ \hline
 Random copies of real extremes & 0.600 & 0.232 & 0.464 \\ \hline
 \rowcolor{rowhl2} EVT-tail copies of real extremes & \textbf{0.608} & \textbf{0.233} & 0.521 \\ \hline
 CTGAN / TVAE + EVT tail & 0.602--0.603 & 0.213--0.215 & \textbf{0.581--0.583} \\ \hline
@@ -1457,8 +1530,9 @@ CTGAN / TVAE + EVT tail & 0.602--0.603 & 0.213--0.215 & \textbf{0.581--0.583} \\
 \end{table}
 
 EVT works on its own: EVT-tail copies beat random copies on severe days in all five seeds (+0.057) and gave the best
-overall score of the study. Generators add the far tail (+0.06 on severe days, 5/5 seeds) at a small cost on heatwave
-starts ($-0.02$, 5/5 seeds), because copies cannot go beyond the hottest real day.
+overall score of the study. Generators add the far tail (+0.06 on severe days, 5/5 seeds) at a small cost on onset
+days ($-0.02$, 5/5 seeds; CTGAN + EVT beat the EVT-tail copies on severe days in 93\% of month resamples and lost
+on onset days in all of them), because copies cannot go beyond the hottest real day.
 
 \section{What the Results Mean in Practice}
 For the best model, about \textbf{6 in 10 warnings are correct} (random guessing: 2 in 100), it catches \textbf{55\%}
@@ -1466,23 +1540,29 @@ of extreme days a day ahead, and it raises a false alarm on about \textbf{0.7\%}
 to today.
 
 \section{Limitations}
+\label{sec:limits}
 Results are based on reanalysis data, not yet checked against station records; only next-day heat was modelled; the
 gain over persistence on all days is modest; the tail-focus setting was fixed by hand; and free compute limited
 training to half of 1981--2010. The clean-up of synthetic days only cuts values to valid ranges and orders the three
 daily temperatures: humidity is not recomputed after the dewpoint is capped, temperatures are not checked against
 the height of the cell a row is placed on, and the 7--30-day history columns are not recomputed from the daily
-values.
+values. One early design choice used test scores: the day-of-year predictors were dropped after an early run in which
+they lowered the test score (on validation they had helped), so that choice was not made on validation alone. Two of
+the 57 columns (\texttt{dist\_trend} and \texttt{tmax\_change}) are identical, so the model has 56 distinct
+predictors; for a tree model a duplicate column changes little.
 
 % =============================================================================
 \chapter{Conclusion and Future Work}
 % =============================================================================
 \section{Conclusions}
 \begin{enumerate}
-  \item Modelling heat extremes as a tail with a GPD gives bounded, physically sensible tails and shows a doubling of
-        heat extremes in 2016--2025.
+  \item Modelling heat extremes as a tail with a GPD gives bounded tails in winter, pre-monsoon and monsoon (the
+        post-monsoon tail is not clearly bounded), and the fixed thresholds show a doubling of heat extremes in
+        2016--2025.
   \item Using EVT to focus added extremes on the rarest part of the tail improved every generator, and works even with
-        simple copies of real days.
-  \item CTGAN and TVAE with EVT tail focus gave the best results on the most severe days and beat persistence overall.
+        simple copies of real days, which gave the best all-days and onset scores.
+  \item CTGAN and TVAE with EVT tail focus gave the best results on the most severe days and beat persistence overall,
+        at a small cost on onset days.
   \item Where synthetic extremes are placed matters more than how realistic they are.
 \end{enumerate}
 
@@ -1555,23 +1635,23 @@ generation methods under a fixed classifier; and open, reproducible code that ru
 \bibitem{dsouza2025overlap} A. D'souza, Swetha M and S. Sarawagi, \reflink{https://arxiv.org/abs/2412.15657}{Synthetic tabular data generation for imbalanced classification: The surprising effectiveness of an overlap class}, AAAI Conference on Artificial Intelligence, 2025.
 \bibitem{bhatia2021exgan} S. Bhatia, A. Jain and B. Hooi, \reflink{https://arxiv.org/abs/2009.08454}{ExGAN: Adversarial generation of extreme samples}, AAAI Conference on Artificial Intelligence, 2021.
 \bibitem{boulaguiem2022evtgan} Y. Boulaguiem, J. Zscheischler, E. Vignotto, K. van der Wiel and S. Engelke, \reflink{https://arxiv.org/abs/2111.00267}{Modeling and simulating spatial extremes by combining extreme value theory with generative adversarial networks}, Environmental Data Science 1 (2022) e5.
-\bibitem{pandey2025heavy} K. Pandey et al., Heavy-tailed diffusion models, International Conference on Learning Representations, 2025.
+\bibitem{pandey2025heavy} K. Pandey et al., \reflink{https://arxiv.org/abs/2410.14171}{Heavy-tailed diffusion models}, International Conference on Learning Representations, 2025.
 \bibitem{lopezgomez2023heat} I. Lopez-Gomez, A. McGovern, S. Agrawal and J. Hickey, \reflink{https://arxiv.org/abs/2205.10972}{Global extreme heat forecasting using neural weather models}, Artificial Intelligence for the Earth Systems, 2023.
 \bibitem{zhang2025records} Z. Zhang, E. Fischer, J. Zscheischler and S. Engelke, \reflink{https://arxiv.org/abs/2508.15724}{Numerical models outperform AI weather forecasts of record-breaking extremes}, arXiv:2508.15724, 2025.
-\bibitem{bhan_imd} S. C. Bhan, \reflink{https://heathealth.info/wp-content/uploads/Poster_SC-Bhan_FGFHH-Subhash-Bhan.pdf}{Heat wave forecasting and early warning services of the India Meteorological Department} (poster), Global Heat Health Information Network.
-\bibitem{ke2017lightgbm} G. Ke et al., LightGBM: A highly efficient gradient boosting decision tree, Advances in Neural Information Processing Systems, 2017.
+\bibitem{bhan_imd} S. C. Bhan, \reflink{https://heathealth.info/wp-content/uploads/Poster_SC-Bhan_FGFHH-Subhash-Bhan.pdf}{Heat wave forecasting and early warning services of the India Meteorological Department} (poster), Global Heat Health Information Network, accessed November 2026.
+\bibitem{ke2017lightgbm} G. Ke et al., \reflink{https://papers.nips.cc/paper/6907-lightgbm-a-highly-efficient-gradient-boosting-decision-tree}{LightGBM: A highly efficient gradient boosting decision tree}, Advances in Neural Information Processing Systems, 2017.
 \bibitem{munoz2021era5land} J. Mu\~noz-Sabater et al., \reflink{https://doi.org/10.5194/essd-13-4349-2021}{ERA5-Land: A state-of-the-art global reanalysis dataset for land applications}, Earth System Science Data 13 (2021) 4349--4383.
 \bibitem{farr2007srtm} T. G. Farr et al., \reflink{https://doi.org/10.1029/2005RG000183}{The Shuttle Radar Topography Mission}, Reviews of Geophysics 45 (2007) RG2004.
 \bibitem{hersbach2020era5} H. Hersbach et al., \reflink{https://doi.org/10.1002/qj.3803}{The ERA5 global reanalysis}, Quarterly Journal of the Royal Meteorological Society 146 (2020) 1999--2049.
 \bibitem{srivastava2009imd} A. K. Srivastava, M. Rajeevan and S. R. Kshirsagar, \reflink{https://doi.org/10.1002/asl.232}{Development of a high resolution daily gridded temperature data set (1969--2005) for the Indian region}, Atmospheric Science Letters 10 (2009) 249--254.
 \bibitem{rani2021imdaa} S. I. Rani et al., \reflink{https://doi.org/10.1175/JCLI-D-20-0412.1}{IMDAA: High-resolution satellite-era reanalysis for the Indian monsoon region}, Journal of Climate 34 (2021) 5109--5133.
 \bibitem{gelaro2017merra2} R. Gelaro et al., \reflink{https://doi.org/10.1175/JCLI-D-16-0758.1}{The Modern-Era Retrospective Analysis for Research and Applications, Version 2 (MERRA-2)}, Journal of Climate 30 (2017) 5419--5454.
-\bibitem{gsod} NOAA National Centers for Environmental Information, \reflink{https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.ncdc:C00516}{Global Surface Summary of the Day (GSOD)}.
+\bibitem{gsod} NOAA National Centers for Environmental Information, \reflink{https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.ncdc:C00516}{Global Surface Summary of the Day (GSOD)}, accessed November 2026.
 \bibitem{eyring2016cmip6} V. Eyring et al., \reflink{https://doi.org/10.5194/gmd-9-1937-2016}{Overview of the Coupled Model Intercomparison Project Phase 6 (CMIP6) experimental design and organization}, Geoscientific Model Development 9 (2016) 1937--1958.
 \bibitem{imd2022normal} India Meteorological Department, \reflink{https://internal.imd.gov.in/press_release/20220414_pr_1572.pdf}{Updated rainfall normal based on data of 1971--2020} (press release), New Delhi, 14 April 2022.
 \bibitem{imd2026monsoon} India Meteorological Department, \reflink{https://mausam.imd.gov.in/Forecast/marquee_data/Salient_Features_SW_MONSOON\%20_2026_30_sep.pdf}{Salient features of the 2026 southwest monsoon season}, 30 September 2026.
-\bibitem{imdheatdef} India Meteorological Department, \reflink{https://mausam.imd.gov.in/pdfs/heatcolduser/Definition.pdf}{Heat wave and warm night: definitions and criteria}.
-\bibitem{naturalearth} Natural Earth, \reflink{https://www.naturalearthdata.com}{Free vector map data at 1:10m scale} (admin-0, India point of view; admin-1 states).
+\bibitem{imdheatdef} India Meteorological Department, \reflink{https://mausam.imd.gov.in/pdfs/heatcolduser/Definition.pdf}{Heat wave and warm night: definitions and criteria}, accessed November 2026.
+\bibitem{naturalearth} Natural Earth, \reflink{https://www.naturalearthdata.com}{Free vector map data at 1:10m scale} (admin-0, India point of view; admin-1 states), accessed November 2026.
 \bibitem{saito2015pr} T. Saito and M. Rehmsmeier, \reflink{https://doi.org/10.1371/journal.pone.0118432}{The precision-recall plot is more informative than the ROC plot when evaluating binary classifiers on imbalanced datasets}, PLOS ONE 10(3): e0118432, 2015.
 \bibitem{davis2006pr} J. Davis and M. Goadrich, \reflink{https://doi.org/10.1145/1143844.1143874}{The relationship between precision-recall and ROC curves}, Proceedings of the 23rd International Conference on Machine Learning (ICML), 2006.
 \bibitem{funk2015chirps} C. Funk et al., \reflink{https://doi.org/10.1038/sdata.2015.66}{The climate hazards infrared precipitation with stations: a new environmental record for monitoring extremes}, Scientific Data 2, 150066, 2015.
